@@ -32,3 +32,11 @@ docs/
 
 # 演示视频暂不进入普通 Git 仓库
 /科普.mp4
+
+# Track the server deployment record only
+!docs/
+docs/*
+!docs/server-model-deployment-record.md
+
+.codex-ssh-askpass.cmd
+!docs/服务器端模型部署以及与开发机端项目连接的实施方案.md
