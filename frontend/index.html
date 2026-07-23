@@ -1,0 +1,1763 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>深海海底智能探测系统 - 旗舰版</title>
+  <style>
+    /* =========================================
+       1. 全局样式与重置
+       ========================================= */
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI','Microsoft YaHei','PingFang SC',sans-serif; }
+    
+    :root { 
+        --bg-deep: #020617; 
+        --bg-panel: rgba(15, 23, 42, 0.85); 
+        --bg-card-dark: rgba(10, 15, 30, 0.75);
+        --bg-input: #0f172a; 
+        --accent-blue: #38bdf8; 
+        --accent-purple: #818cf8;
+        --accent-glow: rgba(56, 189, 248, 0.4); 
+        --text-main: #e0e0e0; 
+        --text-muted: #94a3b8; 
+        --border-color: rgba(148, 163, 184, 0.2); 
+        --shadow-panel: 0 12px 40px rgba(0, 0, 0, 0.6); 
+        --system-yellow: #facc15; 
+        --system-green: #4ade80; 
+        --system-red: #ef4444; 
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body { 
+        background: radial-gradient(circle at 10% 20%, #071a2e 0%, #020811 40%, #041c2c 100%) fixed; 
+        color: var(--text-main); 
+        min-height: 100vh; 
+        overflow-x: hidden;
+    }
+
+    ::-webkit-scrollbar { width: 6px; } 
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); } 
+    ::-webkit-scrollbar-thumb { background: rgba(56, 189, 248, 0.3); border-radius: 3px; } 
+    ::-webkit-scrollbar-thumb:hover { background: rgba(56, 189, 248, 0.6); }
+
+    /* =========================================
+       2. 分屏布局架构
+       ========================================= */
+    .screen-section {
+        min-height: 100vh;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        padding: 1.5rem 2rem;
+        position: relative;
+    }
+
+    #screen-monitor { justify-content: flex-start; }
+    #screen-analysis { justify-content: center; padding-top: 4rem; }
+
+    /* 向下滚动提示 */
+    .scroll-hint {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        opacity: 0.7;
+        transition: opacity 0.3s;
+        z-index: 20;
+    }
+    .scroll-hint:hover { opacity: 1; }
+    .scroll-hint span { font-size: 0.8rem; color: var(--accent-blue); letter-spacing: 1px; text-transform: uppercase; }
+    .scroll-icon {
+        width: 24px; height: 24px;
+        border-right: 2px solid var(--accent-blue);
+        border-bottom: 2px solid var(--accent-blue);
+        transform: rotate(45deg);
+        animation: bounce 2s infinite;
+    }
+    @keyframes bounce {
+        0%, 20%, 50%, 80%, 100% { transform: translateY(0) rotate(45deg); }
+        40% { transform: translateY(-10px) rotate(45deg); }
+        60% { transform: translateY(-5px) rotate(45deg); }
+    }
+
+    /* =========================================
+       3. 现有功能区样式
+       ========================================= */
+    .header { text-align: center; margin-bottom: 1.5rem; position: relative; z-index: 10; }
+    h1 { font-size: 2.2rem; margin-bottom: 0.5rem; background: linear-gradient(120deg, #00f0ff, #3b82f6, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-shadow: 0 0 20px rgba(56, 189, 248, 0.3); letter-spacing: 0.1em; font-weight: 800; }
+    .subtitle { font-size: 0.95rem; color: var(--text-muted); letter-spacing: 0.05em; } .subtitle span { color: var(--accent-blue); }
+    
+    .main-grid { display: flex; gap: 1.5rem; max-width: 1600px; margin: 0 auto; width: 100%; height: calc(100vh - 160px); min-height: 600px; position: relative; z-index: 5; }
+    .left-panel { flex: 1.2; display: flex; flex-direction: column; min-width: 0; }
+    
+    /* Resizer 布局调整 */
+    .right-panel { 
+        flex: 1.5; 
+        display: flex; 
+        flex-direction: column; 
+        gap: 0; 
+        min-width: 0; 
+    }
+    
+    .camera-container { background: var(--bg-panel); border-radius: 16px; padding: 1.2rem; flex: 1; display: flex; flex-direction: column; border: 1px solid var(--border-color); box-shadow: var(--shadow-panel); backdrop-filter: blur(20px); position: relative; overflow: hidden; }
+    .camera-frame { flex: 1; background: radial-gradient(circle at center, #1e293b 0%, #020617 100%); border-radius: 12px; position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center; border: 1px solid rgba(56, 189, 248, 0.2); box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8); max-width: 100%; max-height: 100%; }
+    .scan-line { position: absolute; top: 0; left: 0; width: 100%; height: 2px; background: rgba(56, 189, 248, 0.8); box-shadow: 0 0 10px var(--accent-blue); animation: scan 3s linear infinite; display: none; z-index: 5; pointer-events: none; }
+    @keyframes scan { 0% { top: 0; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
+    video { width: 100%; height: 100%; object-fit: contain; display: none; max-width: 100%; max-height: 100%; }
+    .placeholder-content { text-align: center; color: var(--text-muted); transition: opacity 0.3s; }
+    .placeholder-content i { font-size: 3.5rem; color: var(--accent-blue); margin-bottom: 1rem; display: block; opacity: 0.8; font-style: normal; }
+    .camera-controls { margin-top: 1rem; display: flex; justify-content: space-between; align-items: center; }
+    .stats-group { display: flex; gap: 1.5rem; font-size: 0.8rem; color: var(--text-muted); }
+    .stat-item b { color: var(--accent-blue); font-weight: 600; font-family: monospace; font-size: 0.9rem; }
+    .btn-group { display: flex; gap: 1rem; }
+    button { padding: 0.6rem 1.2rem; border-radius: 30px; border: 1px solid rgba(255,255,255,0.1); font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); display: flex; align-items: center; gap: 0.5rem; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    button:active { transform: scale(0.98); } button:disabled { filter: grayscale(1); opacity: 0.5; cursor: not-allowed; }
+    #startBtn { background: linear-gradient(135deg, #0ea5e9, #2563eb); } #startBtn:hover { box-shadow: 0 0 15px rgba(14, 165, 233, 0.5); }
+    #stopBtn { background: linear-gradient(135deg, #ef4444, #b91c1c); } #stopBtn:hover { box-shadow: 0 0 15px rgba(239, 68, 68, 0.5); }
+    #sendBtn.btn-stop { background: var(--system-red) !important; box-shadow: 0 0 10px rgba(239, 68, 68, 0.4); } #sendBtn.btn-stop:hover { box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); }
+    
+    /* 允许高度调整的容器样式 */
+    .memo-container { 
+        background: var(--bg-panel); 
+        border-radius: 16px; 
+        padding: 1.2rem; 
+        border: 1px solid var(--border-color); 
+        flex: 1; 
+        display: flex; 
+        flex-direction: column; 
+        backdrop-filter: blur(20px); 
+        overflow: hidden; 
+        min-height: 150px; 
+    }
+    
+    .chat-container { 
+        background: var(--bg-panel); 
+        border-radius: 16px; 
+        padding: 1.2rem; 
+        border: 1px solid var(--border-color); 
+        flex: 1; 
+        display: flex; 
+        flex-direction: column; 
+        backdrop-filter: blur(20px); 
+        box-shadow: var(--shadow-panel); 
+        min-height: 150px; 
+    }
+
+    /* Resizer 样式 */
+    .resizer {
+        height: 12px;
+        background: transparent;
+        cursor: row-resize;
+        width: 100%;
+        flex-shrink: 0;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.3s;
+    }
+    .resizer:hover, .resizer.active {
+        background: rgba(56, 189, 248, 0.15);
+    }
+    .resizer::after {
+        content: "";
+        width: 40px;
+        height: 4px;
+        background: rgba(148, 163, 184, 0.2); 
+        border-radius: 2px;
+        transition: 0.3s;
+    }
+    .resizer:hover::after, .resizer.active::after {
+        background: var(--accent-blue);
+        box-shadow: 0 0 8px var(--accent-blue);
+        width: 60px;
+    }
+
+    .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; padding-bottom: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .panel-title { font-size: 1.05rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
+    .text-yellow { color: var(--system-yellow); } .text-blue { color: var(--accent-blue); }
+    .status-badge { font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 12px; background: rgba(255,255,255,0.05); color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: #64748b; } .dot.active { background: var(--system-green); box-shadow: 0 0 8px var(--system-green); animation: pulse 2s infinite; }
+    .scroll-content { flex: 1; overflow-y: auto; padding-right: 5px; display: flex; flex-direction: column; gap: 0.8rem; }
+    .memo-card { background: rgba(250, 204, 21, 0.05); border-left: 3px solid var(--system-yellow); padding: 0.8rem; border-radius: 0 8px 8px 0; animation: slideIn 0.3s ease-out; }
+    .memo-header { font-size: 0.75rem; color: rgba(250, 204, 21, 0.8); margin-bottom: 0.4rem; font-weight: bold; }
+    .memo-text { font-size: 0.9rem; line-height: 1.5; color: #f1f5f9; }
+    .audio-wave { display: flex; align-items: center; gap: 3px; height: 16px; opacity: 0; transition: opacity 0.3s; }
+    .audio-wave.playing { opacity: 1; }
+    .bar { width: 3px; background: var(--accent-blue); animation: wave 1s infinite ease-in-out; border-radius: 2px; }
+    .bar:nth-child(1) { height: 60%; animation-delay: 0.0s; } .bar:nth-child(2) { height: 100%; animation-delay: 0.1s; } .bar:nth-child(3) { height: 50%; animation-delay: 0.2s; } .bar:nth-child(4) { height: 80%; animation-delay: 0.3s; }
+    .chat-messages { flex: 1; overflow-y: auto; padding: 1rem 0.5rem; display: flex; flex-direction: column; gap: 1.2rem; min-height: 0; }
+    .msg { max-width: 88%; padding: 0.8rem 1rem; border-radius: 12px; position: relative; line-height: 1.6; font-size: 0.95rem; animation: slideUp 0.3s ease; }
+    .msg-user { align-self: flex-end; background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(21, 128, 61, 0.15)); border: 1px solid rgba(74, 222, 128, 0.2); border-bottom-right-radius: 2px; color: #dcfce7; }
+    .msg-ai { align-self: flex-start; background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(30, 64, 175, 0.15)); border: 1px solid rgba(96, 165, 250, 0.2); border-bottom-left-radius: 2px; color: #dbeafe; }
+    .msg-title { font-size: 0.75rem; opacity: 0.7; margin-bottom: 0.3rem; display: block; font-weight: 600; }
+    .cursor::after { content: ''; display: inline-block; width: 8px; height: 16px; background: var(--accent-blue); vertical-align: middle; margin-left: 4px; animation: blink 1s infinite; }
+    .input-wrapper { margin-top: 1rem; display: flex; gap: 0.8rem; background: rgba(0,0,0,0.2); padding: 0.5rem; border-radius: 30px; border: 1px solid var(--border-color); }
+    #chatInput { flex: 1; background: transparent; border: none; padding: 0.6rem 1rem; color: white; font-size: 0.95rem; outline: none; }
+    #chatInput::placeholder { color: rgba(255,255,255,0.3); }
+    .icon-btn { width: 42px; height: 42px; padding: 0; border-radius: 50%; justify-content: center; font-size: 1.1rem; flex-shrink: 0; }
+    #voiceBtn.recording { background: var(--system-red); animation: breath 1.5s infinite; }
+    
+    @keyframes slideIn { from { transform: translateX(-20px); opacity: 0; } to { transform: translateX(0) scale(1); opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+    /* 生成图片样式 */
+    .img-container { margin-top: 10px; border-radius: 12px; overflow: hidden; border: 1px solid rgba(56, 189, 248, 0.3); box-shadow: 0 4px 15px rgba(0,0,0,0.3); position: relative; min-height: 200px; background: #0f172a; animation: slideUp 0.3s ease; cursor: zoom-in; }
+    .img-generated { width: 100%; display: block; opacity: 0; transition: opacity 1.5s ease; filter: blur(10px); }
+    .img-generated.loaded { opacity: 1; filter: blur(0); }
+    .img-loading-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(15, 23, 42, 0.8); z-index: 10; transition: opacity 0.5s ease; pointer-events: none; }
+    .loading-spinner { width: 40px; height: 40px; border: 3px solid rgba(56, 189, 248, 0.3); border-radius: 50%; border-top-color: #38bdf8; animation: spin 1s ease-in-out infinite; margin-bottom: 10px; }
+    .loading-text { font-size: 0.85rem; color: #94a3b8; letter-spacing: 1px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* 模态框 */
+    .image-modal { display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); backdrop-filter: blur(8px); align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s; }
+    .image-modal.show { opacity: 1; }
+    .modal-content { max-width: 95%; max-height: 95%; border-radius: 8px; box-shadow: 0 0 30px rgba(56, 189, 248, 0.3); transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    .image-modal.show .modal-content { transform: scale(1); }
+    .close-modal { position: absolute; top: 20px; right: 40px; color: #f1f1f1; font-size: 40px; font-weight: bold; cursor: pointer; transition: 0.3s; z-index: 10000; }
+    .close-modal:hover { color: var(--accent-blue); }
+
+    /* =========================================
+       4. 第二屏：深度分析区样式
+       ========================================= */
+    .analysis-title-area {
+        text-align: center;
+        margin-bottom: 2.2rem;
+    }
+    .analysis-title-area h2 {
+        font-size: 2rem;
+        background: linear-gradient(120deg, #facc15, #f87171);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.5rem;
+    }
+    .analysis-title-area p {
+        color: var(--text-muted);
+        font-size: 1rem;
+    }
+
+    .archive-module {
+        max-width: 1600px;
+        width: 100%;
+        margin: 0 auto;
+        background: var(--bg-card-dark);
+        border: 1px solid var(--border-color);
+        border-radius: 22px;
+        backdrop-filter: blur(20px);
+        box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        overflow: hidden;
+    }
+
+    .archive-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1.2rem 1.5rem;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        gap: 1rem;
+    }
+    .archive-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+    }
+    .archive-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        white-space: nowrap;
+    }
+    .archive-title .badge {
+        font-size: 0.8rem;
+        background: rgba(255,255,255,0.1);
+        padding: 4px 10px;
+        border-radius: 12px;
+        color: var(--text-muted);
+        font-weight: 600;
+    }
+
+    .toggle-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(0,0,0,0.2);
+        border: 1px solid rgba(255,255,255,0.08);
+        padding: 6px;
+        border-radius: 999px;
+    }
+    .toggle-btn {
+        padding: 8px 14px;
+        border-radius: 999px;
+        border: 0;
+        background: transparent;
+        cursor: pointer;
+        font-weight: 700;
+        color: var(--text-muted);
+        box-shadow: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: 0.25s;
+    }
+    .toggle-btn:hover { color: #e2e8f0; background: rgba(255,255,255,0.06); }
+    .toggle-btn.active {
+        background: linear-gradient(135deg, rgba(56,189,248,0.25), rgba(129,140,248,0.2));
+        color: #e2e8f0;
+        border: 1px solid rgba(56, 189, 248, 0.25);
+    }
+
+    .archive-body {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr;
+        gap: 1.2rem;
+        padding: 1.2rem 1.2rem 1.4rem;
+    }
+
+    .capture-pane {
+        display: flex;
+        flex-direction: column;
+        gap: 0.9rem;
+        min-height: 620px;
+    }
+
+    .capture-display {
+        height: 400px;
+        flex-shrink: 0;
+        background: #000;
+        border-radius: 14px;
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,0.1);
+        box-shadow: inset 0 0 35px rgba(0,0,0,0.7);
+    }
+    .capture-display img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0.9;
+        transition: opacity 0.3s, transform 0.5s;
+        cursor: zoom-in;
+        display: none;
+    }
+    .capture-display:hover img { opacity: 1; transform: scale(1.03); }
+    .capture-empty {
+        width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: rgba(255,255,255,0.25);
+        padding: 1rem;
+        text-align: center;
+        gap: 10px;
+    }
+    .capture-empty i { font-size: 3rem; opacity: 0.8; }
+
+    .capture-info {
+        background: rgba(0,0,0,0.22);
+        border-radius: 14px;
+        padding: 1rem 1.1rem;
+        border: 1px solid rgba(255,255,255,0.06);
+        overflow-y: auto;
+        max-height: 180px;
+    }
+    .capture-info h4 {
+        color: var(--accent-blue);
+        margin-bottom: 0.5rem;
+        font-size: 1rem;
+    }
+    .capture-info p {
+        font-size: 0.95rem;
+        line-height: 1.6;
+        color: #cbd5e1;
+        word-break: break-word;
+    }
+
+    .capture-bottom {
+        display: flex;
+        align-items: center;
+        justify-content: center; 
+        gap: 20px;            
+    }
+
+    .pager-btn {
+        background: transparent;
+        border: 1px solid rgba(255,255,255,0.2);
+        color: var(--text-main);
+        width: 38px; height: 38px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer;
+        transition: 0.2s;
+        padding: 0;
+        box-shadow: none;
+    }
+    .pager-btn:hover:not(:disabled) {
+        background: rgba(255,255,255,0.1);
+        border-color: var(--accent-blue);
+        transform: none;
+    }
+    .pager-info {
+        font-family: monospace;
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        white-space: nowrap;
+    }
+
+    .thumb-strip {
+        flex: 1;
+        display: flex;
+        gap: 10px;
+        overflow-x: auto;
+        padding: 6px 2px;
+        scroll-behavior: smooth;
+    }
+    .thumb {
+        width: 86px;
+        height: 52px;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(0,0,0,0.25);
+        flex-shrink: 0;
+        cursor: pointer;
+        position: relative;
+        transition: 0.2s;
+    }
+    .thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0.85;
+        transition: 0.2s;
+    }
+    .thumb:hover img { opacity: 1; transform: scale(1.05); }
+    .thumb.active {
+        border-color: rgba(56,189,248,0.55);
+        box-shadow: 0 0 0 2px rgba(56,189,248,0.15);
+    }
+    .thumb.active::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border: 2px solid rgba(56,189,248,0.65);
+        border-radius: 10px;
+        pointer-events: none;
+    }
+
+    .stats-pane {
+        display: flex;
+        flex-direction: column;
+        min-height: 620px;
+        background: rgba(0,0,0,0.18);
+        border-radius: 16px;
+        border: 1px solid rgba(255,255,255,0.08);
+        overflow: hidden;
+    }
+
+    .stats-header {
+        padding: 1rem 1.1rem;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    .stats-header h3 {
+        font-size: 1.1rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        white-space: nowrap;
+    }
+    .stats-header small {
+        color: var(--text-muted);
+        font-family: monospace;
+        font-size: 0.9rem;
+        white-space: nowrap;
+    }
+
+    .stats-body {
+        padding: 1rem 1.1rem 1.2rem;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .stats-empty {
+        color: rgba(255,255,255,0.25);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        gap: 8px;
+        text-align: center;
+        padding: 1rem;
+    }
+
+    .bar-row {
+        display: grid;
+        grid-template-columns: 110px 1fr 52px;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    .bar-label {
+        color: #cbd5e1;
+        font-size: 0.92rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .bar-track {
+        height: 12px;
+        background: rgba(255,255,255,0.08);
+        border-radius: 999px;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,0.06);
+    }
+    .bar-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #38bdf8, #818cf8);
+        border-radius: 999px;
+        transition: width 0.35s ease;
+        box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+    }
+    .bar-val {
+        font-family: monospace;
+        color: var(--accent-blue);
+        text-align: right;
+        font-size: 0.95rem;
+    }
+
+    .panel-hidden { display: none !important; }
+
+    @media (max-width: 1200px) {
+        .archive-body { grid-template-columns: 1fr; }
+        .capture-pane, .stats-pane { min-height: auto; }
+    }
+
+    /* 进度条样式 */
+    .progress-wrapper {
+        margin-top: 15px;
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid rgba(56, 189, 248, 0.2);
+        padding: 10px 15px;
+        border-radius: 8px;
+        animation: slideUp 0.3s ease;
+    }
+    .progress-info {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.85rem;
+        color: var(--accent-blue);
+        margin-bottom: 6px;
+    }
+    .progress-track {
+        width: 100%;
+        height: 6px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #38bdf8, #818cf8);
+        width: 0%;
+        transition: width 0.3s ease;
+        box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+    }
+  </style>
+</head>
+
+<body>
+
+  <section class="screen-section" id="screen-monitor">
+      
+      <div class="header">
+        <h1>深海海底智能探测系统</h1>
+        <p class="subtitle">实时视觉观测 · <span>智能解析</span> · 低延迟语音交互</p>
+      </div>
+
+      <div class="main-grid">
+        <div class="left-panel">
+          <div class="camera-container">
+            <div class="camera-frame">
+              <div class="scan-line" id="scanLine"></div>
+              <video id="videoElement" autoplay playsinline muted></video>
+              <div class="placeholder-content" id="cameraPlaceholder">
+                <i>📷</i>
+                <p>等待接入深海观测信号...</p>
+              </div>
+            </div>
+            <div class="camera-controls">
+                <div class="stats-group">
+                  <span class="stat-item">状态: <b id="sysStatus">待机</b></span>
+                  <span class="stat-item">FPS: <b id="fpsCount">0</b></span>
+                  <span class="stat-item">缓存帧: <b id="bufferSize">0</b></span>
+                </div>
+                <div class="btn-group">
+                  <button id="startBtn">⚡ 接入信号</button>
+                  <button id="stopBtn" disabled>🚫 断开连接</button>
+                  <button id="reportBtn" style="display:none; background: linear-gradient(135deg, #10b981, #059669);">
+                      📄 生成任务摘要
+                  </button>
+                </div>
+            </div>
+            
+            <div id="progressContainer" class="progress-wrapper" style="display:none;">
+                <div class="progress-info">
+                    <span id="progressText">正在通过深海探测大模型分析全量数据...</span>
+                    <span id="progressPercent">0%</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" id="progressBar"></div>
+                </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="right-panel">
+          <div class="memo-container" id="topPanel">
+            <div class="panel-header">
+              <div class="panel-title text-yellow">🔔 深海场景动态监测</div>
+              <div class="status-badge">
+                <div class="dot" id="monitorDot"></div>
+                <span id="monitorText">监测暂停</span>
+              </div>
+            </div>
+            <div class="scroll-content" id="memoContent">
+              <div class="memo-card">
+                <div class="memo-header">SYSTEM <span id="init-time"></span></div>
+                <div class="memo-text">系统已初始化完毕，正在等待视频数据流输入...</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="resizer" id="dragHandle"></div>
+
+          <div class="chat-container" id="bottomPanel">
+            <div class="panel-header">
+              <div class="panel-title text-blue">🤖 智探助手交互终端</div>
+              <div class="audio-wave" id="audioWave">
+                <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+                <span style="font-size:0.8rem; margin-left:5px; color:var(--accent-blue)">Voice Output</span>
+              </div>
+            </div>
+
+            <div class="chat-messages" id="chatBox">
+              <div class="msg msg-ai">
+                <span class="msg-title">
+                    AI ASSISTANT
+                    </span>
+                <p>指挥官你好，我是深海智能助手。我已经准备好辅助你进行海底探测。你可以直接询问我关于画面的问题，或者让我帮你生成图像。</p>
+              </div>
+            </div>
+
+            <div class="input-wrapper">
+              <input type="text" id="chatInput" placeholder="请输入指令或询问内容..." disabled>
+              <button class="icon-btn" id="voiceBtn" disabled>🎤</button>
+              <button class="icon-btn" id="sendBtn" disabled style="background:var(--accent-blue)">➤</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="scroll-hint" onclick="document.getElementById('screen-analysis').scrollIntoView()">
+          <span>Depth Analysis</span>
+          <div class="scroll-icon"></div>
+      </div>
+
+  </section>
+
+  <section class="screen-section" id="screen-analysis">
+      
+      <div class="analysis-title-area">
+          <h2>深海目标深度研判档案</h2>
+          <p>由大模型决定是否截取典型样例，并对已捕获样本进行全量统计</p>
+      </div>
+
+      <div class="archive-module">
+        <div class="archive-header">
+          <div class="archive-left">
+            <div class="archive-title">
+              📁 关键样本捕获与统计
+              <span class="badge" id="archiveBadge">BIO</span>
+            </div>
+            <div class="toggle-group">
+              <button class="toggle-btn active" id="toggleBio">🦑 生物</button>
+              <button class="toggle-btn" id="toggleEnv">⛰️ 环境</button>
+            </div>
+          </div>
+          <div style="color:var(--text-muted); font-size:0.9rem; white-space:nowrap;">
+            Capture by LLM · Stats by Aggregation
+          </div>
+        </div>
+
+        <div class="archive-body">
+          <div class="capture-pane" id="bioPanel">
+            <div class="capture-display">
+              <div class="capture-empty" id="bioEmpty">
+                <i>🦑</i>
+                <div>暂无“典型深海生物样本”捕获记录</div>
+                <div style="font-size:0.85rem; opacity:0.7;">（由大模型判断清晰度、信息量与深海属性后决定截取）</div>
+              </div>
+              <img id="bioImage" src="" onclick="openModal(this.src)">
+            </div>
+
+            <div class="capture-info">
+              <h4>生物描述</h4>
+              <p id="bioDesc">系统正在持续监测画面中的生物活动特征...</p>
+            </div>
+
+            <div class="capture-bottom">
+              <button class="pager-btn" id="bioPrev" disabled>←</button>
+              <span class="pager-info" id="bioPager">0 / 0</span>
+              <button class="pager-btn" id="bioNext" disabled>→</button>
+            </div>
+          </div>
+
+          <div class="stats-pane" id="bioStatsPane">
+            <div class="stats-header">
+              <h3>📊 生物统计柱状图</h3>
+            </div>
+            <div class="stats-body" id="bioStatsBody">
+              <div class="stats-empty" id="bioStatsEmpty">
+                <div style="font-size:2rem;">📈</div>
+                <div>暂无统计数据</div>
+                <div style="font-size:0.85rem; opacity:0.7;">捕获后将自动累计物种/数量统计</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="capture-pane panel-hidden" id="envPanel">
+            <div class="capture-display">
+              <div class="capture-empty" id="envEmpty">
+                <i>🪨</i>
+                <div>暂无“典型深海环境样本”捕获记录</div>
+                <div style="font-size:0.85rem; opacity:0.7;">（由大模型判断清晰度、信息量与深海属性后决定截取）</div>
+              </div>
+              <img id="envImage" src="" onclick="openModal(this.src)">
+            </div>
+
+            <div class="capture-info">
+              <h4>环境描述</h4>
+              <p id="envDesc">系统正在分析海底地形与底质结构...</p>
+            </div>
+
+            <div class="capture-bottom">
+              <button class="pager-btn" id="envPrev" disabled>←</button>
+              <span class="pager-info" id="envPager">0 / 0</span>
+              <button class="pager-btn" id="envNext" disabled>→</button>
+            </div>
+          </div>
+
+          <div class="stats-pane panel-hidden" id="envStatsPane">
+            <div class="stats-header">
+              <h3>📊 环境要素统计柱状图</h3>
+            </div>
+            <div class="stats-body" id="envStatsBody">
+              <div class="stats-empty" id="envStatsEmpty">
+                <div style="font-size:2rem;">🧭</div>
+                <div>暂无统计数据</div>
+                <div style="font-size:0.85rem; opacity:0.7;">捕获后将自动累计环境要素频次统计</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+  </section>
+
+  <div id="imgModal" class="image-modal">
+    <span class="close-modal">&times;</span>
+    <img class="modal-content" id="imgModalContent">
+  </div>
+
+  <script src="js/runtime-config.js"></script>
+  <script src="js/api-client.js"></script>
+  <script src="js/safe-dom.js"></script>
+  <script>
+    // =========================================
+    // 1. 配置与状态管理
+    // =========================================
+    const CONFIG = {
+        API_HOST: window.APP_CONFIG.apiBaseUrl,
+        TTS_HOST: window.APP_CONFIG.speechBaseUrl,
+        FRAME_RATE: 200,        // 抓帧频率
+        MEMO_INTERVAL: 1000,    // 备忘录轮询
+        PUSH_INTERVAL: 1000,    // 推流频率
+        MAX_FRAMES: 150
+    };
+
+    const state = {
+        stream: null,
+        micStream: null,
+        isMonitoring: false,
+        isProcessingQA: false,
+        sessionId: 'sess_' + Math.random().toString(36).substr(2, 9),
+        framesBuffer: [],
+        intervals: { capture: null, memo: null, push: null },
+
+        // 音频状态
+        pendingAudio: {},
+        nextReqId: 0,
+        nextPlayId: 0,
+        isPlayingAudio: false,
+        isQAActive: false,
+        bufferedMemo: null,
+        ttsTextBuffer: "",
+        currentAudioObj: null,
+        
+        lastPlayedMemoTime: "", 
+        abortController: null,
+
+        // 图库历史记录
+        gallery: {
+            bio: [], 
+            env: []
+        },
+        pageIndex: {
+            bio: 0,
+            env: 0
+        },
+
+        // 当前查看面板
+        activePanel: "bio"
+    };
+
+    // DOM 元素引用
+    const dom = {
+        video: document.getElementById('videoElement'),
+        placeholder: document.getElementById('cameraPlaceholder'),
+        scanLine: document.getElementById('scanLine'),
+        startBtn: document.getElementById('startBtn'),
+        stopBtn: document.getElementById('stopBtn'),
+        status: document.getElementById('sysStatus'),
+        fps: document.getElementById('fpsCount'),
+        buffer: document.getElementById('bufferSize'),
+        memoContent: document.getElementById('memoContent'),
+        monitorDot: document.getElementById('monitorDot'),
+        chatBox: document.getElementById('chatBox'),
+        input: document.getElementById('chatInput'),
+        sendBtn: document.getElementById('sendBtn'),
+        voiceBtn: document.getElementById('voiceBtn'),
+        audioWave: document.getElementById('audioWave'),
+        
+        // 模态框
+        modal: document.getElementById('imgModal'),
+        modalImg: document.getElementById('imgModalContent'),
+        closeModal: document.querySelector('.close-modal'),
+
+        // 图库 DOM
+        bio: {
+            img: document.getElementById('bioImage'),
+            empty: document.getElementById('bioEmpty'),
+            desc: document.getElementById('bioDesc'),
+            pager: document.getElementById('bioPager'),
+            prev: document.getElementById('bioPrev'),
+            next: document.getElementById('bioNext')
+        },
+        env: {
+            img: document.getElementById('envImage'),
+            empty: document.getElementById('envEmpty'),
+            desc: document.getElementById('envDesc'),
+            pager: document.getElementById('envPager'),
+            prev: document.getElementById('envPrev'),
+            next: document.getElementById('envNext')
+        },
+
+        // 报告生成组件
+        reportBtn: document.getElementById('reportBtn'),
+        progressContainer: document.getElementById('progressContainer'),
+        progressBar: document.getElementById('progressBar'),
+        progressText: document.getElementById('progressText'),
+        progressPercent: document.getElementById('progressPercent'),
+
+        // 第二屏切换与统计
+        toggleBio: document.getElementById('toggleBio'),
+        toggleEnv: document.getElementById('toggleEnv'),
+        bioPanel: document.getElementById('bioPanel'),
+        envPanel: document.getElementById('envPanel'),
+        bioStatsPane: document.getElementById('bioStatsPane'),
+        envStatsPane: document.getElementById('envStatsPane'),
+        archiveBadge: document.getElementById('archiveBadge'),
+
+        bioStatsBody: document.getElementById('bioStatsBody'),
+        envStatsBody: document.getElementById('envStatsBody'),
+        bioStatsEmpty: document.getElementById('bioStatsEmpty'),
+        envStatsEmpty: document.getElementById('envStatsEmpty'),
+        bioStatsMeta: document.getElementById('bioStatsMeta'),
+        envStatsMeta: document.getElementById('envStatsMeta')
+    };
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // =========================================
+    // 2. 核心功能：抓拍与智能分类
+    // =========================================
+
+    function snapshotVideo() {
+        if (!dom.video.videoWidth) return null;
+        const capCanvas = document.createElement('canvas');
+        capCanvas.width = dom.video.videoWidth;
+        capCanvas.height = dom.video.videoHeight;
+        capCanvas.getContext('2d').drawImage(dom.video, 0, 0);
+        return capCanvas.toDataURL('image/jpeg', 0.85);
+    }
+
+    function classifyContent(text) {
+        const bioKeywords = ["男子", "男生", "杯子", "水杯","水瓶","水壶", "鱼", "蟹", "虾", "生物"];
+        const isBio = bioKeywords.some(kw => text.includes(kw));
+        return isBio ? 'bio' : 'env';
+    }
+
+    function updateGallery(type, imageBase64, text, timestamp, meta = {}) {
+        const target = state.gallery[type];
+        target.unshift({
+            img: imageBase64,
+            text: text,
+            time: timestamp,
+            organisms: meta.organisms || [],
+            env_features: meta.env_features || []
+        });
+        if (target.length > 50) target.pop();
+        state.pageIndex[type] = 0;
+        renderGalleryCard(type);
+        renderStats(type);
+    }
+
+    function renderGalleryCard(type) {
+        const list = state.gallery[type];
+        const index = state.pageIndex[type];
+        const ui = dom[type];
+
+        if (list.length === 0) {
+            ui.empty.style.display = 'flex';
+            ui.img.style.display = 'none';
+            ui.pager.textContent = `0 / 0`;
+            ui.prev.disabled = true;
+            ui.next.disabled = true;
+            return;
+        }
+
+        const item = list[index];
+        ui.empty.style.display = 'none';
+        ui.img.style.display = 'block';
+        ui.img.src = item.img;
+        ui.desc.innerHTML = `<span style="color:#64748b;font-size:0.8rem">${item.time}</span><br>${item.text}`;
+        ui.pager.textContent = `${index + 1} / ${list.length}`;
+        ui.prev.disabled = (index <= 0); 
+        ui.next.disabled = (index >= list.length - 1); 
+    }
+
+    ['bio', 'env'].forEach(type => {
+        dom[type].prev.onclick = () => {
+            if (state.pageIndex[type] > 0) {
+                state.pageIndex[type]--;
+                renderGalleryCard(type);
+            }
+        };
+        dom[type].next.onclick = () => {
+            if (state.pageIndex[type] < state.gallery[type].length - 1) {
+                state.pageIndex[type]++;
+                renderGalleryCard(type);
+            }
+        };
+    });
+
+    function aggregateStats(type) {
+        const list = state.gallery[type];
+        const counter = new Map();
+
+        if (type === "bio") {
+            for (const item of list) {
+            const arr = item.organisms || [];
+            for (const o of arr) {
+                const name = (o && o.name) ? String(o.name) : "未知";
+                const val  = (o && typeof o.count === "number") ? o.count : 1;
+                if (!counter.has(name)) counter.set(name, val);
+            }
+            }
+        } else {
+            for (const item of list) {
+            const arr = item.env_features || [];
+            for (const f of arr) {
+                const name = (f && f.name) ? String(f.name) : "要素";
+                const val  = (f && typeof f.count === "number") ? f.count : 1;
+                if (!counter.has(name)) counter.set(name, val);
+            }
+            }
+        }
+
+        const rows = Array.from(counter.entries()).map(([name, val]) => ({ name, val }));
+        rows.sort((a, b) => b.val - a.val);
+        return rows;
+    }
+
+
+    function renderStats(type) {
+        const rows = aggregateStats(type);
+        const list = state.gallery[type];
+        const maxVal = rows.length ? Math.max(...rows.map(r => r.val)) : 1;
+
+        if (type === "bio") {
+            dom.bioStatsBody.innerHTML = "";
+            if (!rows.length) {
+                dom.bioStatsBody.appendChild(dom.bioStatsEmpty);
+                dom.bioStatsEmpty.style.display = "flex";
+                return;
+            }
+            dom.bioStatsEmpty.style.display = "none";
+
+            const showRows = rows.slice(0, 12);
+            showRows.forEach(r => {
+                const row = document.createElement("div");
+                row.className = "bar-row";
+                row.innerHTML = `
+                    <div class="bar-label" title="${r.name}">${r.name}</div>
+                    <div class="bar-track"><div class="bar-fill" style="width:${Math.max(4, (r.val / maxVal) * 100)}%"></div></div>
+                    <div class="bar-val">${r.val}</div>
+                `;
+                dom.bioStatsBody.appendChild(row);
+            });
+        } else {
+            dom.envStatsBody.innerHTML = "";
+            if (!rows.length) {
+                dom.envStatsBody.appendChild(dom.envStatsEmpty);
+                dom.envStatsEmpty.style.display = "flex";
+                return;
+            }
+            dom.envStatsEmpty.style.display = "none";
+
+            const showRows = rows.slice(0, 12);
+            showRows.forEach(r => {
+                const row = document.createElement("div");
+                row.className = "bar-row";
+                row.innerHTML = `
+                    <div class="bar-label" title="${r.name}">${r.name}</div>
+                    <div class="bar-track"><div class="bar-fill" style="width:${Math.max(4, (r.val / maxVal) * 100)}%"></div></div>
+                    <div class="bar-val">${r.val}</div>
+                `;
+                dom.envStatsBody.appendChild(row);
+            });
+        }
+    }
+
+    function setActivePanel(type) {
+        state.activePanel = type;
+        const isBio = type === "bio";
+        dom.toggleBio.classList.toggle("active", isBio);
+        dom.toggleEnv.classList.toggle("active", !isBio);
+
+        dom.bioPanel.classList.toggle("panel-hidden", !isBio);
+        dom.bioStatsPane.classList.toggle("panel-hidden", !isBio);
+        dom.envPanel.classList.toggle("panel-hidden", isBio);
+        dom.envStatsPane.classList.toggle("panel-hidden", isBio);
+
+        dom.archiveBadge.textContent = isBio ? "BIO" : "ENV";
+        dom.archiveBadge.style.color = isBio ? "#38bdf8" : "#4ade80";
+
+        renderGalleryCard(type);
+        renderStats(type);
+    }
+    dom.toggleBio.onclick = () => setActivePanel("bio");
+    dom.toggleEnv.onclick = () => setActivePanel("env");
+
+    // =========================================
+    // 3. 核心逻辑：Memo 轮询与视频流
+    // =========================================
+
+    async function fetchMemos() {
+        if (!state.isMonitoring) return;
+        try {
+            const res = await fetch(`${CONFIG.API_HOST}/memos`);
+            if (!res.ok) return;
+            const data = await res.json();
+
+            if (data.memos && data.memos.length > 0) {
+                data.memos.forEach(memo => {
+                    if (memo.session_id === state.sessionId) {
+                        addMemo(memo.timestamp, memo.content);
+                        
+                        if (memo.capture && memo.capture.image && memo.capture.type) {
+                            updateGallery(memo.capture.type, memo.capture.image, 
+                                          memo.capture.description, memo.timestamp, {
+                                organisms: memo.capture.organisms || [],
+                                env_features: memo.capture.env_features || []
+                            });
+                        }
+
+                        if (!state.isQAActive) {
+                            processTTSStream(memo.content + "。", "memo");
+                        }
+                    }
+                });
+                
+                state.lastPlayedMemoTime = data.memos[data.memos.length - 1].timestamp;
+            }
+        } catch (e) { console.warn(e); }
+    }
+
+    function addMemo(time, text) {
+        const card = document.createElement('div');
+        card.className = 'memo-card';
+        card.innerHTML = `<div class="memo-header">SYSTEM ${time}</div><div class="memo-text">${text}</div>`;
+        dom.memoContent.appendChild(card);
+        dom.memoContent.scrollTop = dom.memoContent.scrollHeight;
+    }
+
+    async function startCamera() {
+        try {
+            state.stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 } } });
+            dom.video.srcObject = state.stream;
+            dom.video.style.display = 'block';
+            dom.placeholder.style.display = 'none';
+            dom.scanLine.style.display = 'block';
+            dom.status.textContent = "信号接入稳定";
+            dom.status.style.color = "#4ade80";
+            
+            // >>> 修复点：添加文字状态更新
+            dom.monitorDot.classList.add('active');
+            document.getElementById('monitorText').textContent = "实时分析中";
+            
+            updateControls(true);
+            state.isMonitoring = true;
+            state.intervals.capture = setInterval(captureFrame, CONFIG.FRAME_RATE);
+            state.intervals.memo = setInterval(fetchMemos, CONFIG.MEMO_INTERVAL);
+            state.intervals.push = setInterval(pushFramesSilently, CONFIG.PUSH_INTERVAL);
+            
+            const nowTime = new Date().toLocaleTimeString('en-GB', { hour12: false }); 
+            addMemo(nowTime, "系统启动，监测中...");
+
+        } catch (err) { console.error(err); alert("无法访问摄像头"); }
+    }
+
+    async function stopCamera() {
+        if (state.stream) state.stream.getTracks().forEach(t => t.stop());
+        clearInterval(state.intervals.capture);
+        clearInterval(state.intervals.memo);
+        clearInterval(state.intervals.push);
+        
+        dom.video.style.display = 'none';
+        dom.placeholder.style.display = 'block';
+        dom.scanLine.style.display = 'none';
+        
+        stopGlobalAudio(true);
+        state.isMonitoring = false;
+        state.isQAActive = false;
+        updateControls(false);
+        updateStats();
+
+        dom.status.textContent = "连接断开 (待归档)";
+        dom.status.style.color = "#facc15"; 
+        
+        // 恢复初始状态
+        dom.monitorDot.classList.remove('active');
+        document.getElementById('monitorText').textContent = "监测暂停";
+        
+        if (state.framesBuffer.length > 0 || dom.chatBox.children.length > 1) {
+            dom.reportBtn.style.display = "flex";
+            dom.startBtn.style.display = "none";
+            dom.stopBtn.style.display = "none";
+        } else {
+            alert("本次连接无有效数据，无需生成报告。");
+            resetReportUI(); 
+        }
+        
+        state.framesBuffer = [];
+    }
+
+    function resetReportUI() {
+        dom.reportBtn.style.display = "none";
+        dom.progressContainer.style.display = "none";
+        dom.startBtn.style.display = "flex";
+        dom.stopBtn.style.display = "flex";
+        dom.status.textContent = "连接断开";
+        dom.status.style.color = "#ef4444";
+    }
+
+    function updateControls(isLive) {
+        dom.startBtn.disabled = isLive;
+        dom.stopBtn.disabled = !isLive;
+        dom.input.disabled = !isLive;
+        dom.sendBtn.disabled = !isLive;
+        dom.voiceBtn.disabled = !isLive;
+    }
+
+    function toSamples(type) {
+        return (state.gallery[type] || []).map((item, index) => {
+            let detectedNames = [];
+            const description = item.text || "";
+            
+            if (type === "bio") {
+                const rawNames = (item.organisms || []).map(o => o.name).filter(n => n);
+                detectedNames = rawNames.filter(name => description.includes(name));
+                if (detectedNames.length === 0 && rawNames.length > 0) {
+                    detectedNames = [rawNames[0]];
+                }
+            } else {
+                const rawNames = (item.env_features || []).map(f => f.name).filter(n => n);
+                detectedNames = rawNames.filter(name => description.includes(name));
+                if (detectedNames.length === 0 && rawNames.length > 0) {
+                    detectedNames = [rawNames[0]];
+                }
+            }
+
+            let finalName = detectedNames.length > 0 
+                            ? detectedNames.join("和") 
+                            : (type === "bio" ? "典型生物样本" : "环境地形样本");
+
+            return {
+                name: finalName,
+                image: item.img,
+                description: description,
+                time: item.time || ""
+            };
+        });
+    }
+    function toStats(type) {
+        return aggregateStats(type).map(r => ({ name: r.name, count: r.val }));
+    }
+
+    // =========================================
+    // 4. 报告生成 (Robost Version)
+    // =========================================
+    dom.reportBtn.onclick = async () => {
+        dom.reportBtn.style.display = "none";
+        dom.progressContainer.style.display = "block";
+        
+        const nowStr = new Date().toLocaleTimeString('en-GB', { hour12: false });
+
+        const memos = [];
+        document.querySelectorAll('.memo-card').forEach(card => {
+            const headerText = card.querySelector('.memo-header').innerText; 
+            const contentText = card.querySelector('.memo-text').innerText;
+            const timeMatch = headerText.match(/(\d{1,2}:\d{2}:\d{2})/);
+            let time = timeMatch ? timeMatch[1] : nowStr;
+            memos.push({ time, text: contentText });
+        });
+
+        const chats = [];
+        document.querySelectorAll('.msg').forEach(msg => {
+            const p = msg.querySelector('p');
+            const text = p ? p.innerText : "";
+            
+            const imgEl = msg.querySelector('img.img-generated');
+            let imgData = null;
+            if (imgEl) {
+                imgData = imgEl.src;
+            }
+
+            if (!text && !imgData) return;
+
+            const isUser = msg.classList.contains('msg-user');
+            const role = isUser ? "指挥官" : "AI助手";
+            
+            const timeEl = msg.querySelector('.msg-time');
+            let time = timeEl ? timeEl.innerText.trim() : nowStr;
+            if (!time || time === "—") time = nowStr;
+
+            chats.push({ role, text, time, image: imgData });
+        });
+
+        const bio_samples = toSamples("bio");
+        const env_samples = toSamples("env");
+        const bio_stats = toStats("bio");
+        const env_stats = toStats("env");
+
+        const meta = {
+        session_id: state.sessionId,
+        time_range: `${memos?.[0]?.time || "-"} ~ ${memos?.[memos.length - 1]?.time || "-"}`,
+        frame_rate_ms: CONFIG.FRAME_RATE,
+        push_interval_ms: CONFIG.PUSH_INTERVAL,
+        memo_interval_ms: CONFIG.MEMO_INTERVAL,
+        stat_policy: "bio按count累加；env按出现次数累加"
+        };
+
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+             if (progress < 60) progress += 2; else if (progress < 95) progress += 0.5;
+             dom.progressBar.style.width = `${progress}%`;
+             dom.progressPercent.innerText = `${Math.floor(progress)}%`;
+        }, 100);
+
+        try {
+            const res = await fetch(`${CONFIG.API_HOST}/generate_report`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ memos, chats, bio_samples, env_samples, bio_stats, env_stats, meta })
+            });
+            clearInterval(progressInterval);
+            
+            if (res.ok) {
+                dom.progressBar.style.width = "100%";
+                dom.progressText.innerText = "✅ 下载中...";
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `深海探测报告_${new Date().toISOString().slice(0,10)}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                setTimeout(() => { alert("下载成功"); resetReportUI(); }, 1500);
+            } else { throw new Error("API Error"); }
+        } catch (e) {
+            clearInterval(progressInterval);
+            dom.progressText.innerText = "❌ 失败";
+            dom.progressBar.style.background = "#ef4444";
+            setTimeout(resetReportUI, 2000);
+        }
+    };
+
+    // =========================================
+    // 5. 交互与 WebSocket 逻辑
+    // =========================================
+
+    function captureFrame() {
+        if (!dom.video.videoWidth) return;
+        canvas.width = dom.video.videoWidth;
+        canvas.height = dom.video.videoHeight;
+        ctx.drawImage(dom.video, 0, 0);
+        canvas.toBlob(blob => {
+            blob.arrayBuffer().then(buffer => {
+                const uint8 = new Uint8Array(buffer);
+                state.framesBuffer.push(uint8);
+                if (state.framesBuffer.length > CONFIG.MAX_FRAMES) state.framesBuffer.shift();
+                updateStats();
+            });
+        }, 'image/jpeg', 0.6);
+    }
+
+    function updateStats() {
+        dom.buffer.textContent = state.framesBuffer.length;
+        dom.fps.textContent = Math.round(1000 / CONFIG.FRAME_RATE);
+    }
+
+    async function pushFramesSilently() {
+        if (!state.isMonitoring) return;
+        if (state.framesBuffer.length < 5) return;
+        const formData = new FormData();
+        const framesToSend = state.framesBuffer.slice(-15);
+        framesToSend.forEach((f, index) => {
+            formData.append('video', new Blob([f], { type: 'image/jpeg' }), `frame_${index}.jpg`);
+        });
+        try {
+            await fetch(`${CONFIG.API_HOST}/videoanalyze`, {
+                method: "POST", headers: { "X-Session-ID": state.sessionId }, body: formData
+            });
+        } catch (e) { console.warn(e); }
+    }
+
+    async function handleUserSubmit() {
+        const text = dom.input.value.trim();
+        if (!text) return;
+        dom.input.value = '';
+
+        state.isQAActive = true;
+        state.bufferedMemo = null;
+        stopGlobalAudio(true);
+
+        state.isProcessingQA = true;
+        dom.input.disabled = true;
+        dom.voiceBtn.disabled = true;
+        dom.sendBtn.textContent = "⏹";
+        dom.sendBtn.classList.add("btn-stop");
+
+        addChatMessage('user', text);
+        const aiMsgContent = addChatMessage('ai', '', true);
+
+        state.abortController = new AbortController();
+
+        const formData = new FormData();
+        formData.append('question', text);
+        const framesToSend = state.framesBuffer.slice(-15);
+        framesToSend.forEach((f, index) => {
+            formData.append('video', new Blob([f], { type: 'image/jpeg' }), `frame_${index}.jpg`);
+        });
+
+        try {
+            const response = await fetch(`${CONFIG.API_HOST}/videoanalyze`, {
+                method: "POST", headers: { "X-Session-ID": state.sessionId },
+                body: formData, signal: state.abortController.signal
+            });
+
+            if (!response.ok) throw new Error("Backend Error");
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let fullText = "";
+            let buffer = "";
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    if (!line.trim()) continue;
+                    try {
+                        const data = JSON.parse(line);
+                        
+                        if (data.type === "chunk") {
+                            fullText += data.text;
+                            aiMsgContent.textContent = fullText;
+                            dom.chatBox.scrollTop = dom.chatBox.scrollHeight;
+                            processTTSStream(data.text, "qa");
+                        } 
+                        else if (data.type === "image") {
+                            console.log("🎨 接收到生成图片");
+                            const imgDiv = document.createElement('div');
+                            imgDiv.className = 'img-container';
+                            const loader = document.createElement('div');
+                            loader.className = 'img-loading-overlay';
+                            loader.innerHTML = `<div class="loading-spinner"></div><span class="loading-text">RENDERING NEURAL IMAGE...</span>`;
+                            const img = document.createElement('img');
+                            img.className = 'img-generated';
+                            img.src = "data:image/jpeg;base64," + data.content;
+                            img.onclick = function() { openModal(this.src); };
+                            imgDiv.appendChild(loader); imgDiv.appendChild(img);
+                            aiMsgContent.parentNode.appendChild(imgDiv);
+                            dom.chatBox.scrollTop = dom.chatBox.scrollHeight;
+                            img.onload = () => {
+                                setTimeout(() => {
+                                    loader.style.opacity = '0';
+                                    img.classList.add('loaded');
+                                    setTimeout(() => loader.remove(), 500);
+                                }, 800);
+                            };
+                        }
+                        else if (data.type === "error") {
+                            console.error("后端报错:", data.text);
+                            aiMsgContent.textContent += "\n[系统错误] " + data.text;
+                            aiMsgContent.style.color = "#ef4444";
+                        }
+                    } catch (_) {}
+                }
+            }
+
+            if (state.ttsTextBuffer.trim()) {
+                queueTTS(state.ttsTextBuffer, "qa");
+                state.ttsTextBuffer = "";
+            }
+            aiMsgContent.parentElement.classList.remove("cursor");
+
+        } catch (err) {
+            if (err.name !== 'AbortError') aiMsgContent.textContent = "⚠️ Error: " + err.message;
+            state.isQAActive = false;
+        } finally {
+            state.isProcessingQA = false;
+            if (!state.isPlayingAudio) {
+                console.log("🎤 流结束且音频空闲，强制检查锁状态...");
+                tryPlayNext(); 
+            }
+            if (!state.isPlayingAudio && dom.sendBtn.classList.contains("btn-stop")) {
+                resetUIState();
+            }
+        }
+    }
+
+    function addChatMessage(role, text, isStreaming = false) {
+        const div = document.createElement("div");
+        div.className = `msg msg-${role}`;
+        
+        const roleName = role === "user" ? "COMMANDER" : "AI ASSISTANT";
+        const nowTime = new Date().toLocaleTimeString('en-GB', { hour12: false });
+        
+        div.innerHTML = `
+            <span class="msg-title">
+                ${roleName} 
+                <span class="msg-time" style="float:right; font-weight:normal; opacity:0.6; font-family:monospace;">${nowTime}</span>
+            </span>
+            <p>${text}</p>
+        `;
+        
+        if (isStreaming) div.classList.add("cursor");
+        dom.chatBox.appendChild(div);
+        dom.chatBox.scrollTop = dom.chatBox.scrollHeight;
+        return div.querySelector('p');
+    }
+
+    function resetUIState() {
+        state.isProcessingQA = false;
+        dom.input.disabled = false;
+        dom.voiceBtn.disabled = false;
+        dom.sendBtn.disabled = false;
+        dom.sendBtn.classList.remove("btn-stop");
+        dom.sendBtn.textContent = "➤";
+        dom.input.focus();
+    }
+
+    dom.input.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleUserSubmit(); });
+    dom.sendBtn.onclick = () => {
+        if (dom.sendBtn.classList.contains("btn-stop")) stopInteraction(); else handleUserSubmit();
+    };
+    function stopInteraction() {
+        if (state.abortController) state.abortController.abort();
+        stopGlobalAudio(true);
+        state.isQAActive = false;
+        state.bufferedMemo = null;
+        dom.input.value = '';
+        resetUIState();
+    }
+
+    // TTS & Audio
+    function stopGlobalAudio(clearQueue = false) {
+        if (state.currentAudioObj) {
+            state.currentAudioObj.pause();
+            state.currentAudioObj = null;
+        }
+        state.isPlayingAudio = false;
+        dom.audioWave.classList.remove("playing");
+        if (clearQueue) {
+            state.pendingAudio = {};
+            state.nextReqId = 0;
+            state.nextPlayId = 0;
+            state.ttsTextBuffer = "";
+        }
+    }
+
+    function processTTSStream(newText, type) {
+        state.ttsTextBuffer += newText;
+        const punctuationRegex = /[，,。？！；\.\?\!;]/g;
+        while (true) {
+            punctuationRegex.lastIndex = 0;
+            let match;
+            let validCutIndex = -1;
+            while ((match = punctuationRegex.exec(state.ttsTextBuffer)) !== null) {
+                const potentialLength = match.index + 1;
+                const isStrongEnd = /[。？！\.\?\!]/.test(match[0]);
+                if (potentialLength >= 10 || isStrongEnd) {
+                    validCutIndex = potentialLength;
+                    break;
+                }
+            }
+            if (validCutIndex !== -1) {
+                const chunk = state.ttsTextBuffer.substring(0, validCutIndex);
+                queueTTS(chunk, type);
+                state.ttsTextBuffer = state.ttsTextBuffer.substring(validCutIndex);
+            } else { break; }
+        }
+    }
+
+    async function queueTTS(text, type) {
+        if (!text || text.length < 2) return;
+        if (type === "memo" && state.isQAActive) {
+            state.bufferedMemo = text;
+            return;
+        }
+        const myId = state.nextReqId++;
+        try {
+            const res = await fetch(`${CONFIG.TTS_HOST}/tts`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text })
+            });
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                state.pendingAudio[myId] = url;
+                if (!state.isPlayingAudio) tryPlayNext();
+            } else {
+                state.pendingAudio[myId] = 'SKIP';
+                if (!state.isPlayingAudio) tryPlayNext();
+            }
+        } catch (e) {
+            state.pendingAudio[myId] = 'SKIP';
+            if (!state.isPlayingAudio) tryPlayNext();
+        }
+    }
+
+    function tryPlayNext() {
+        const url = state.pendingAudio[state.nextPlayId];
+        if (!url) {
+            state.isPlayingAudio = false;
+            dom.audioWave.classList.remove("playing");
+            if (state.isQAActive && !state.isProcessingQA) {
+                const pendingKeys = Object.keys(state.pendingAudio).map(Number);
+                const maxPending = Math.max(...pendingKeys, -1);
+                if (maxPending < state.nextPlayId) {
+                    state.isQAActive = false;
+                    if (state.bufferedMemo) {
+                        const memoText = state.bufferedMemo;
+                        state.bufferedMemo = null;
+                        stopGlobalAudio(true);
+                        setTimeout(() => processTTSStream(memoText, "memo"), 500);
+                    }
+                    if (dom.sendBtn.classList.contains("btn-stop")) resetUIState();
+                }
+            }
+            return;
+        }
+        if (url === 'SKIP') {
+            delete state.pendingAudio[state.nextPlayId];
+            state.nextPlayId++;
+            tryPlayNext();
+            return;
+        }
+        state.isPlayingAudio = true;
+        dom.audioWave.classList.add("playing");
+        const audio = new Audio(url);
+        state.currentAudioObj = audio;
+        delete state.pendingAudio[state.nextPlayId];
+        state.nextPlayId++;
+        audio.onended = () => {
+            URL.revokeObjectURL(url);
+            state.currentAudioObj = null;
+            tryPlayNext();
+        };
+        audio.onerror = () => {
+            state.currentAudioObj = null;
+            tryPlayNext();
+        };
+        audio.play().catch(e => { state.isPlayingAudio = false; });
+    }
+
+    // Voice Recorder
+    let mediaRecorder;
+    let audioChunks = [];
+    dom.voiceBtn.onclick = async () => {
+        if (dom.voiceBtn.classList.contains("recording")) {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+            dom.voiceBtn.classList.remove("recording");
+            dom.voiceBtn.textContent = "🎤";
+        } else {
+            stopGlobalAudio(true);
+            try {
+                if (!state.micStream) state.micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const stream = state.micStream;
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(audioChunks, { type: "audio/webm" });
+                    const formData = new FormData();
+                    formData.append("audio", blob);
+                    const tempMsg = addChatMessage("ai", "正在解析...", false);
+                    try {
+                        const res = await fetch(`${CONFIG.TTS_HOST}/stt`, { method: "POST", body: formData });
+                        const data = await res.json();
+                        tempMsg.parentElement.remove();
+                        if (data.text) {
+                            dom.input.value = data.text;
+                            handleUserSubmit();
+                        }
+                    } catch (e) {
+                        tempMsg.parentElement.remove();
+                        console.error("STT Error", e);
+                    }
+                };
+                mediaRecorder.start();
+                dom.voiceBtn.classList.add("recording");
+                dom.voiceBtn.textContent = "🛑";
+            } catch (e) { console.error(e); alert("无法访问麦克风"); state.micStream = null; }
+        }
+    };
+
+    // Modal
+    function openModal(src) {
+        dom.modalImg.src = src;
+        dom.modal.style.display = "flex";
+        requestAnimationFrame(() => dom.modal.classList.add("show"));
+    }
+    function closeModal() {
+        dom.modal.classList.remove("show");
+        setTimeout(() => { dom.modal.style.display = "none"; dom.modalImg.src = ""; }, 300);
+    }
+    dom.closeModal.onclick = closeModal;
+    dom.modal.onclick = (e) => { if (e.target === dom.modal) closeModal(); };
+
+    // Init
+    dom.startBtn.addEventListener("click", startCamera);
+    dom.stopBtn.addEventListener("click", stopCamera);
+    
+    (function initStaticTime() {
+        const span = document.getElementById('init-time');
+        if(span) {
+            span.innerText = new Date().toLocaleTimeString('en-GB', { hour12: false });
+        }
+    })();
+
+    // 第二屏默认展示 bio
+    setActivePanel("bio");
+
+    // =========================================
+    // 6. 拖拽调整高度逻辑
+    // =========================================
+    (function initResizer() {
+        const resizer = document.getElementById('dragHandle');
+        const topPanel = document.getElementById('topPanel');
+        const bottomPanel = document.getElementById('bottomPanel');
+        
+        let isResizing = false;
+        let lastY = 0;
+
+        resizer.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            lastY = e.clientY;
+            resizer.classList.add('active');
+            
+            // 锁定当前高度为像素值，去除 flex:1 属性
+            const topHeight = topPanel.getBoundingClientRect().height;
+            const bottomHeight = bottomPanel.getBoundingClientRect().height;
+            
+            topPanel.style.flex = 'none';
+            bottomPanel.style.flex = 'none';
+            topPanel.style.height = `${topHeight}px`;
+            bottomPanel.style.height = `${bottomHeight}px`;
+
+            document.body.style.userSelect = 'none';
+            document.body.style.cursor = 'row-resize';
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+
+            const deltaY = e.clientY - lastY;
+            const currentTopHeight = parseInt(window.getComputedStyle(topPanel).height);
+            const currentBottomHeight = parseInt(window.getComputedStyle(bottomPanel).height);
+
+            // 往下拖：上变高，下变矮
+            let newTopHeight = currentTopHeight + deltaY;
+            let newBottomHeight = currentBottomHeight - deltaY;
+
+            // 限制最小高度 (150px)
+            if (newTopHeight > 150 && newBottomHeight > 150) {
+                topPanel.style.height = `${newTopHeight}px`;
+                bottomPanel.style.height = `${newBottomHeight}px`;
+                lastY = e.clientY;
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                resizer.classList.remove('active');
+                document.body.style.userSelect = '';
+                document.body.style.cursor = '';
+            }
+        });
+    })();
+
+  </script>
+</body>
+</html>

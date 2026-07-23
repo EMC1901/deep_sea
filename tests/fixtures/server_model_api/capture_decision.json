@@ -1,0 +1,16 @@
+{
+  "request_id": "draft-request-id",
+  "decision": {
+    "is_deepsea": true,
+    "is_typical": true,
+    "category": "bio",
+    "description": "画面中出现一只测试虾。",
+    "organisms": [
+      {
+        "name": "测试虾",
+        "count": 1
+      }
+    ],
+    "env_features": []
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "request_id": "draft-request-id",
+  "model": "memo",
+  "vectors": [
+    [0.6, 0.8]
+  ],
+  "dimension": 2,
+  "normalized": true
+}

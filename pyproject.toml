@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deep-sea-explorer"
+version = "0.1.0"
+description = "Deep Sea Explorer 的渐进式重构工程配置"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "Flask==3.1.3",
+    "Flask-Cors==6.0.5",
+    "httpx==0.28.1",
+    "opencv-python==5.0.0.93",
+    "faiss-cpu==1.14.3",
+    "reportlab==5.0.0",
+    "PyMuPDF==1.28.0",
+    "imageio-ffmpeg==0.6.0",
+    "baidu-aip==4.16.13",
+    "numpy==2.4.6",
+]
+
+[project.optional-dependencies]
+# 开发机 remote 模式不安装模型/GPU 库；httpx 已在通用依赖中。
+remote = []
+dev = [
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "ruff==0.15.22",
+    "mypy==2.3.0",
+]
+# 以下版本必须由服务器负责人按 CUDA、驱动与模型版本共同确认后再固定。
+local-model = [
+    "torch",
+    "transformers",
+    "modelscope",
+    "sentence-transformers",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+force-exclude = true
+exclude = [
+    "backend",
+    "frontend",
+    "test.py",
+    "pytest-cache-files-*",
+]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -p no:cacheprovider"
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src"]
+warn_unused_configs = true

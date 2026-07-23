@@ -1,0 +1,19 @@
+from __future__ import annotations
+
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Protocol
+
+from deep_sea_explorer.domain.models import CaptureDecision, ModelHealth, StreamEvent
+
+
+class VisionModelGateway(Protocol):
+    def health(self) -> ModelHealth: ...
+    def describe_video(self, video_path: Path) -> str: ...
+    def evaluate_frame(self, image_path: Path) -> CaptureDecision: ...
+    def answer(self, video_path: Path, question: str) -> Iterator[StreamEvent]: ...
+    def summarize_report(self, material: dict[str, object]) -> str: ...
+
+
+class ImageGenerationGateway(Protocol):
+    def generate(self, prompt: str) -> bytes: ...

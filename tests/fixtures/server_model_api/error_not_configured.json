@@ -1,0 +1,8 @@
+{
+  "request_id": "draft-request-id",
+  "error": {
+    "code": "MODEL_SERVICE_NOT_CONFIGURED",
+    "message": "服务器模型服务尚未配置。",
+    "retryable": false
+  }
+}
