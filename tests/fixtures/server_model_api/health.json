@@ -1,10 +1,10 @@
 {
   "request_id": "draft-request-id",
-  "service_version": "draft",
+  "status": "ok",
   "models": {
     "qwen": "not_configured",
     "image": "not_configured",
-    "gte": "not_configured",
-    "minilm": "not_configured"
+    "memo": "not_loaded",
+    "rag": "not_loaded"
   }
 }

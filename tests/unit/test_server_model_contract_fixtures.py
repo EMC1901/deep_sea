@@ -21,11 +21,12 @@ def read_env_template(path: Path) -> dict[str, str]:
     return values
 
 
-def test_server_model_contract_is_explicitly_draft_and_not_implemented() -> None:
+def test_server_model_contract_is_frozen_at_v1() -> None:
     contract = CONTRACT_FILE.read_text(encoding="utf-8")
 
-    assert "DRAFT / NOT IMPLEMENTED" in contract
-    assert "不能被视为可用接口" in contract
+    assert "API 契约 v1" in contract
+    assert "已冻结（S2）" in contract
+    assert "服务器模型服务尚未实现" in contract
     for endpoint in (
         "GET /v1/health",
         "POST /v1/vision/describe-video",
@@ -59,11 +60,12 @@ def test_mock_fixtures_match_the_draft_contract() -> None:
         if line
     ]
 
-    assert set(health["models"]) == {"qwen", "image", "gte", "minilm"}
+    assert health["status"] == "ok"
+    assert set(health["models"]) == {"qwen", "image", "memo", "rag"}
     assert decision["decision"]["category"] == "bio"
     assert decision["decision"]["organisms"][0]["count"] == 1
     assert embedding["model"] == "memo"
-    assert embedding["dimension"] == len(embedding["vectors"][0])
+    assert embedding["dimension"] == len(embedding["embeddings"][0])
     assert embedding["normalized"] is True
     assert error["error"]["code"] == "MODEL_SERVICE_NOT_CONFIGURED"
-    assert [event["type"] for event in events] == ["chunk", "chunk", "final"]
+    assert [event["type"] for event in events] == ["delta", "delta", "done"]

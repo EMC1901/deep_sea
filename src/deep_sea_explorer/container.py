@@ -95,8 +95,8 @@ def build_remote_container(settings: Settings) -> ApplicationContainer:
         settings,
         RemoteVisionGateway(client),
         RemoteImageGateway(client),
-        RemoteEmbeddingGateway(client, "gte"),
-        RemoteEmbeddingGateway(client, "minilm"),
+        RemoteEmbeddingGateway(client, "memo"),
+        RemoteEmbeddingGateway(client, "rag"),
     )
 
 

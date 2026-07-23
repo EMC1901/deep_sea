@@ -58,3 +58,15 @@ def test_development_script_exposes_expected_actions_and_remote_api_entry() -> N
         assert f'"{command}"' in script
     assert "MODEL_BACKEND=remote" in script
     assert "deep_sea_explorer.main" in script
+
+
+def test_model_service_tunnel_is_local_only_and_does_not_embed_credentials() -> None:
+    script = (PROJECT_ROOT / "scripts" / "start-model-service-tunnel.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "-L \"${LocalPort}:127.0.0.1:${RemotePort}\"" in script
+    assert "ExitOnForwardFailure=yes" in script
+    assert "ServerAliveInterval=30" in script
+    assert "Authorization" not in script
+    assert "MODEL_SERVICE_AUTH_TOKEN" not in script
