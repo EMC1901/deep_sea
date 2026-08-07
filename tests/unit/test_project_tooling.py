@@ -23,9 +23,14 @@ def test_pyproject_separates_remote_and_local_model_dependencies() -> None:
 
     extras = project["project"]["optional-dependencies"]
     assert extras["remote"] == []
-    assert {"torch", "transformers", "modelscope", "sentence-transformers"} == set(
-        extras["local-model"]
-    )
+    assert {
+        "torch",
+        "transformers==4.57.1",
+        "modelscope",
+        "sentence-transformers",
+        "accelerate",
+        "diffusers",
+    } == set(extras["local-model"])
     assert project["tool"]["pytest"]["ini_options"]["testpaths"] == ["tests"]
 
 
@@ -41,6 +46,11 @@ def test_environment_templates_keep_remote_development_disabled_by_default() -> 
     assert development["QWEN_MODEL_PATH"] == ""
     assert server["MODEL_BACKEND"] == "local"
     assert server["MODEL_SERVICE_ENABLED"] == "false"
+    assert server["MODEL_SERVICE_HOST"] == "127.0.0.1"
+    assert server["MODEL_SERVICE_PORT"] == "19000"
+    assert server["MODEL_MAX_CONCURRENT_REQUESTS"] == "1"
+    assert server["MODEL_MAX_QUEUE_SIZE"] == "4"
+    assert server["MODEL_MAX_EMBEDDING_TEXTS"] == "32"
 
 
 def test_environment_templates_do_not_contain_baidu_credentials() -> None:
@@ -54,10 +64,46 @@ def test_environment_templates_do_not_contain_baidu_credentials() -> None:
 def test_development_script_exposes_expected_actions_and_remote_api_entry() -> None:
     script = (PROJECT_ROOT / "scripts" / "dev.ps1").read_text(encoding="utf-8")
 
-    for command in ("test", "lint", "api", "speech", "web", "remote-model-check"):
+    for command in (
+        "test",
+        "lint",
+        "api",
+        "speech",
+        "web",
+        "video-test",
+        "remote-model-check",
+        "remote-model-test",
+        "remote-api-video-test",
+    ):
         assert f'"{command}"' in script
     assert "MODEL_BACKEND=remote" in script
     assert "deep_sea_explorer.main" in script
+    assert "RUN_REMOTE_MODEL_TESTS" in script
+    assert "test_main_api_video.py" in script
+
+
+def test_fake_camera_launcher_forces_an_isolated_chrome_profile() -> None:
+    script = (
+        PROJECT_ROOT / "scripts" / "start-video-camera-test.ps1"
+    ).read_text(encoding="utf-8")
+
+    for value in (
+        "YUV4MPEG2",
+        "--use-fake-ui-for-media-stream",
+        "--use-fake-device-for-media-stream",
+        "--use-file-for-fake-video-capture",
+        "--user-data-dir",
+        "DeepSeaExplorerChromeProfiles",
+        "ValidateOnly",
+    ):
+        assert value in script
+
+
+def test_main_api_video_helper_samples_frames_and_uses_the_local_api() -> None:
+    script = (PROJECT_ROOT / "scripts" / "test_main_api_video.py").read_text(encoding="utf-8")
+
+    for value in ("cv2.VideoCapture", "at least four", "/videoanalyze", "X-Session-ID"):
+        assert value in script
 
 
 def test_model_service_tunnel_is_local_only_and_does_not_embed_credentials() -> None:

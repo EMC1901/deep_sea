@@ -1,3 +1,5 @@
+"""历史报告实现，仅供迁移对照；当前实现位于 src/deep_sea_explorer/。"""
+
 import os
 import re
 import base64
@@ -466,6 +468,5 @@ class ReportGenerator:
             ('padding', (0,0), (-1,-1), 6),
         ]))
         return t
-
 
 

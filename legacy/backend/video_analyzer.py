@@ -1,3 +1,5 @@
+"""历史视觉分析实现，仅供迁移对照；当前实现位于 src/deep_sea_explorer/。"""
+
 import os
 import cv2
 import numpy as np

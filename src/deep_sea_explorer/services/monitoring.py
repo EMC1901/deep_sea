@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import base64
+import logging
 from datetime import datetime
 from pathlib import Path
+from collections.abc import Callable
+from typing import TypeVar
 
-from deep_sea_explorer.domain.models import Capture, Memo
+from deep_sea_explorer.domain.models import Capture, Memo, SessionState
+
+
+LOGGER = logging.getLogger(__name__)
+T = TypeVar("T")
 
 
 class MonitoringService:
@@ -37,42 +44,84 @@ class MonitoringService:
         ):
             return None
         video_path = Path(state.latest_video)
-        state.last_analyzed_video = state.latest_video
-        content = self.vision.describe_video(video_path)
-        vector = tuple(self.embedding.embed([content])[0])
+        content = self._stage(
+            session_id, "describe_video", lambda: self.vision.describe_video(video_path)
+        )
+        vector = tuple(
+            self._stage(session_id, "memo_embedding", lambda: self.embedding.embed([content]))[0]
+        )
         if state.last_memo_embedding:
             similarity = sum(left * right for left, right in zip(vector, state.last_memo_embedding))
             if similarity >= self.threshold:
+                state.last_analyzed_video = str(video_path)
                 return None
         state.last_memo_embedding = vector
-        capture = None
+        capture = self._capture_or_none(session_id, state, video_path)
+        memo = Memo(datetime.now().strftime("%H:%M:%S"), content, session_id, capture)
+        self.broker.publish(memo)
+        state.last_analyzed_video = str(video_path)
+        return memo
+
+    def _capture_or_none(
+        self,
+        session_id: str,
+        state: SessionState,
+        video_path: Path,
+    ) -> Capture | None:
+        frame_path: Path | None = None
+        stage = "frame_path"
         try:
             frame_path = self.files.frame_path(session_id)
+            stage = "extract_last_frame"
             self._last_frame(video_path, frame_path)
+            stage = "evaluate_frame"
             decision = self.vision.evaluate_frame(frame_path)
             if decision.is_deepsea and decision.is_typical:
                 if decision.category.value == "bio":
+                    stage = "update_bio_stats"
                     organisms = self.stats.update(state, decision.category, decision.organisms)
-                    capture = Capture(
+                    stage = "encode_capture"
+                    return Capture(
                         decision.category,
                         self._data_uri(frame_path),
                         decision.description,
                         organisms=organisms,
                     )
                 else:
+                    stage = "update_env_stats"
                     features = self.stats.update(state, decision.category, decision.env_features)
-                    capture = Capture(
+                    stage = "encode_capture"
+                    return Capture(
                         decision.category,
                         self._data_uri(frame_path),
                         decision.description,
                         env_features=features,
                     )
+            return None
+        except Exception as error:
+            LOGGER.exception(
+                "monitoring capture_degraded session_id=%s stage=%s error_type=%s",
+                session_id,
+                stage,
+                type(error).__name__,
+            )
+            return None
         finally:
-            if "frame_path" in locals():
+            if frame_path is not None:
                 frame_path.unlink(missing_ok=True)
-        memo = Memo(datetime.now().strftime("%H:%M:%S"), content, session_id, capture)
-        self.broker.publish(memo)
-        return memo
+
+    @staticmethod
+    def _stage(session_id: str, stage: str, operation: Callable[[], T]) -> T:
+        try:
+            return operation()
+        except Exception as error:
+            LOGGER.exception(
+                "monitoring stage_failed session_id=%s stage=%s error_type=%s",
+                session_id,
+                stage,
+                type(error).__name__,
+            )
+            raise
 
     @staticmethod
     def _last_frame(video_path: Path, output: Path) -> None:

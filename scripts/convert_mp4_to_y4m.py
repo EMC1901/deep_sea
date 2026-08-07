@@ -5,7 +5,10 @@ import imageio_ffmpeg
 
 def main():
     if len(sys.argv) < 3:
-        print('用法: python convert_mp4_to_y4m.py "输入.mp4" "输出.y4m" [fps] [width] [height]')
+        print(
+            '用法: python scripts/convert_mp4_to_y4m.py '
+            '"输入.mp4" "输出.y4m" [fps] [width] [height]'
+        )
         sys.exit(1)
 
     in_mp4 = sys.argv[1]

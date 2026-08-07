@@ -1,0 +1,11 @@
+artifacts/deployment-archives/ 中的六个历史部署包是否需要长期保留。
+
+legacy/backend/ 中的三个旧实现是否可以在下一版本彻底删除。
+
+backend/app.py 兼容入口何时结束迁移期。
+
+未被当前页面引用的 frontend/login.html 是否仍有产品用途。
+
+docs/history/ 中的阶段记录是否需要全部长期保存。
+
+本地 .env 已保留且继续忽略，请勿提交其中的凭据。

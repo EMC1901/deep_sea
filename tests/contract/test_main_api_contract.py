@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 from flask import Response
@@ -98,3 +99,25 @@ def test_rag_validation_and_report_download_contract(client) -> None:
     assert report.status_code == 200
     assert report.mimetype == "application/pdf"
     assert "attachment" in report.headers["Content-Disposition"]
+
+
+def test_report_file_is_removed_only_after_the_response_closes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = Mock()
+    settings = Settings(model_backend=ModelBackend.FAKE)
+    container = build_fake_container(settings)
+    monkeypatch.setattr(container.reports, "generate", lambda _: target)
+    import deep_sea_explorer.api.routes.reports as reports_route
+
+    monkeypatch.setattr(
+        reports_route,
+        "send_file",
+        lambda *args, **kwargs: Response(b"%PDF-1.4\n", mimetype="application/pdf"),
+    )
+    app = create_app(settings, container)
+    response = app.test_client().post("/generate_report", json={})
+
+    target.unlink.assert_not_called()
+    response.close()
+    target.unlink.assert_called_once_with(missing_ok=True)

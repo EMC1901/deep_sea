@@ -33,9 +33,12 @@ dev = [
 # 以下版本必须由服务器负责人按 CUDA、驱动与模型版本共同确认后再固定。
 local-model = [
     "torch",
-    "transformers",
+    # GTE 模型已在服务器上以此版本通过 CUDA 推理验证；5.x 会触发索引越界。
+    "transformers==4.57.1",
     "modelscope",
     "sentence-transformers",
+    "accelerate",
+    "diffusers",
 ]
 
 [tool.setuptools]
@@ -51,7 +54,7 @@ force-exclude = true
 exclude = [
     "backend",
     "frontend",
-    "test.py",
+    "legacy",
     "pytest-cache-files-*",
 ]
 

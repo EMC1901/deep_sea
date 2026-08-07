@@ -8,9 +8,19 @@ from deep_sea_explorer.infrastructure.models.fake import (
     FakeImageGateway,
     FakeVisionGateway,
 )
-from deep_sea_explorer.infrastructure.models.local.lazy import (
-    LocalUnavailableGateway,
+from deep_sea_explorer.infrastructure.models.local.adapters import (
+    EmbeddingAdapter,
+    ImageAdapter,
+    QwenAdapter,
+)
+from deep_sea_explorer.infrastructure.models.local.gateways import (
+    LocalEmbeddingGateway,
+    LocalImageGateway,
     LocalVisionGateway,
+)
+from deep_sea_explorer.infrastructure.models.local.runtime import (
+    InferenceCoordinator,
+    LocalModelRuntime,
 )
 from deep_sea_explorer.infrastructure.models.remote.client import RemoteModelClient
 from deep_sea_explorer.infrastructure.models.remote.embedding import RemoteEmbeddingGateway
@@ -60,7 +70,7 @@ def _build(
         vision, memo_embedding, sessions, memos, files, stats, settings.memo_similarity_threshold
     )
     questions = QuestionAnsweringService(vision, image, rag, sessions)
-    reports = ReportService(vision, ReportLabRenderer(), files)
+    reports = ReportService(vision, ReportLabRenderer(settings.report_font_path), files)
     return ApplicationContainer(
         settings,
         vision,
@@ -101,12 +111,25 @@ def build_remote_container(settings: Settings) -> ApplicationContainer:
 
 
 def build_local_container(settings: Settings) -> ApplicationContainer:
+    runtime = LocalModelRuntime(
+        InferenceCoordinator(
+            settings.model_max_concurrent_requests,
+            settings.model_max_queue_size,
+            settings.model_queue_timeout_seconds,
+        )
+    )
     return _build(
         settings,
-        LocalVisionGateway(settings.qwen_model_path),
-        LocalUnavailableGateway("image"),
-        LocalUnavailableGateway("memo embedding"),
-        LocalUnavailableGateway("rag embedding"),
+        LocalVisionGateway(runtime, QwenAdapter(settings.qwen_model_path)),
+        LocalImageGateway(runtime, ImageAdapter(settings.image_model_path)),
+        LocalEmbeddingGateway(
+            runtime,
+            EmbeddingAdapter("gte", settings.memo_embedding_model_path, 768, trust_remote_code=True),
+        ),
+        LocalEmbeddingGateway(
+            runtime,
+            EmbeddingAdapter("minilm", settings.rag_embedding_model_path, 384, trust_remote_code=False),
+        ),
     )
 
 

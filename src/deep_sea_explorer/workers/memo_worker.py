@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import logging
 import threading
 import time
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class MemoWorker:
@@ -20,7 +24,12 @@ class MemoWorker:
             try:
                 self.monitoring.process_session(session_id)
                 self.last_success_monotonic = time.monotonic()
-            except Exception:
+            except Exception as error:
+                LOGGER.warning(
+                    "memo worker retry_scheduled session_id=%s error_type=%s",
+                    session_id,
+                    type(error).__name__,
+                )
                 continue
 
     def start(self) -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -9,6 +10,9 @@ import httpx
 
 from deep_sea_explorer.config import Settings
 from deep_sea_explorer.domain.exceptions import ModelUnavailableError
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class RemoteModelClient:
@@ -65,9 +69,7 @@ class RemoteModelClient:
             response.raise_for_status()
             return response
         except httpx.HTTPError as error:
-            raise ModelUnavailableError(
-                f"remote model request failed: {type(error).__name__}"
-            ) from error
+            raise _remote_failure(error, method, path, stream=False) from error
 
     @contextmanager
     def stream(
@@ -95,9 +97,7 @@ class RemoteModelClient:
             response.raise_for_status()
             yield response
         except httpx.HTTPError as error:
-            raise ModelUnavailableError(
-                f"remote model stream failed: {type(error).__name__}"
-            ) from error
+            raise _remote_failure(error, method, path, stream=True) from error
         finally:
             if response is not None:
                 response.close()
@@ -114,3 +114,42 @@ class RemoteModelClient:
 
     def close(self) -> None:
         self._client.close()
+
+
+def _remote_failure(
+    error: httpx.HTTPError,
+    method: str,
+    path: str,
+    *,
+    stream: bool,
+) -> ModelUnavailableError:
+    status: int | str = "unavailable"
+    code = "NETWORK_ERROR"
+    request_id = "unknown"
+    if isinstance(error, httpx.HTTPStatusError):
+        response = error.response
+        status = response.status_code
+        request_id = response.headers.get("X-Request-ID", "unknown")
+        try:
+            body = response.json()
+            if isinstance(body, dict):
+                request_id = str(body.get("request_id") or request_id)
+                problem = body.get("error")
+                if isinstance(problem, dict) and isinstance(problem.get("code"), str):
+                    code = problem["code"]
+        except ValueError:
+            code = "INVALID_ERROR_RESPONSE"
+    operation = "stream" if stream else "request"
+    LOGGER.error(
+        "remote_model failure operation=%s method=%s endpoint=%s status=%s code=%s request_id=%s error_type=%s",
+        operation,
+        method,
+        path,
+        status,
+        code,
+        request_id,
+        type(error).__name__,
+    )
+    return ModelUnavailableError(
+        f"remote model {operation} failed: status={status} code={code} request_id={request_id}"
+    )

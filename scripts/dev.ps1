@@ -1,10 +1,12 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet("test", "lint", "api", "speech", "web", "remote-model-check")]
+    [ValidateSet("test", "lint", "api", "speech", "web", "video-test", "remote-model-check", "remote-model-test", "remote-api-video-test")]
     [string]$Action,
 
-    [string]$EnvFile = ".env"
+    [string]$EnvFile = ".env",
+
+    [string]$VideoPath
 )
 
 $ErrorActionPreference = "Stop"
@@ -47,6 +49,19 @@ function Assert-RemoteDevelopmentMode {
     }
 }
 
+function Assert-RemoteModelServiceConfiguration {
+    Assert-RemoteDevelopmentMode
+    if ($env:MODEL_SERVICE_ENABLED -ne "true") {
+        throw "Model service checks are disabled. Set MODEL_SERVICE_ENABLED=true in a local .env before explicitly running this action."
+    }
+    if (-not $env:MODEL_SERVICE_BASE_URL -or $env:MODEL_SERVICE_BASE_URL -match '\.invalid/?$') {
+        throw "MODEL_SERVICE_BASE_URL must be a real server address, not a placeholder."
+    }
+    if ($env:MODEL_SERVICE_AUTH_TYPE -eq "bearer" -and -not $env:MODEL_SERVICE_AUTH_TOKEN) {
+        throw "Bearer authentication requires MODEL_SERVICE_AUTH_TOKEN. This script never prints the token."
+    }
+}
+
 Import-LocalEnvFile -Path $EnvFile
 $Python = Get-PythonCommand
 
@@ -71,17 +86,16 @@ switch ($Action) {
     "web" {
         & $Python -B -m http.server 8000 --directory frontend
     }
+    "video-test" {
+        $launcher = Join-Path $PSScriptRoot "start-video-camera-test.ps1"
+        if ($VideoPath) {
+            & $launcher -VideoPath $VideoPath
+        } else {
+            & $launcher
+        }
+    }
     "remote-model-check" {
-        Assert-RemoteDevelopmentMode
-        if ($env:MODEL_SERVICE_ENABLED -ne "true") {
-            throw "Model service checks are disabled. Set MODEL_SERVICE_ENABLED=true in a local .env before explicitly running this action."
-        }
-        if (-not $env:MODEL_SERVICE_BASE_URL -or $env:MODEL_SERVICE_BASE_URL -match '\.invalid/?$') {
-            throw "MODEL_SERVICE_BASE_URL must be a real server address, not a placeholder."
-        }
-        if ($env:MODEL_SERVICE_AUTH_TYPE -eq "bearer" -and -not $env:MODEL_SERVICE_AUTH_TOKEN) {
-            throw "Bearer authentication requires MODEL_SERVICE_AUTH_TOKEN. This script never prints the token."
-        }
+        Assert-RemoteModelServiceConfiguration
 
         $baseUrl = $env:MODEL_SERVICE_BASE_URL.TrimEnd('/')
         $apiPrefix = $env:MODEL_SERVICE_API_PREFIX
@@ -102,5 +116,20 @@ switch ($Action) {
         $response = Invoke-RestMethod -Method Get -Uri $healthUrl -Headers $headers -TimeoutSec $timeout
         Write-Host "Remote model health check succeeded: $healthUrl"
         $response | ConvertTo-Json -Depth 8
+    }
+    "remote-model-test" {
+        Assert-RemoteModelServiceConfiguration
+        $env:RUN_REMOTE_MODEL_TESTS = "1"
+        & $Python -B -m pytest tests/remote_integration/test_server_model_smoke.py -v
+    }
+    "remote-api-video-test" {
+        Assert-RemoteModelServiceConfiguration
+        if (-not $VideoPath) {
+            throw "-VideoPath is required, for example: .\\scripts\\dev.ps1 remote-api-video-test -VideoPath .\\assets\\demo\\deep-sea-demo.mp4"
+        }
+        if (-not (Test-Path -LiteralPath $VideoPath -PathType Leaf)) {
+            throw "Video file does not exist: $VideoPath"
+        }
+        & $Python -B scripts/test_main_api_video.py --video $VideoPath
     }
 }

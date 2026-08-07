@@ -1,3 +1,5 @@
+"""历史 RAG 实现，仅供迁移对照；当前实现位于 src/deep_sea_explorer/。"""
+
 import os
 import logging
 import fitz

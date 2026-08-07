@@ -39,6 +39,8 @@ class Settings:
     model_service_enabled: bool = False
     model_service_base_url: str = "https://model-server.example.invalid"
     model_service_api_prefix: str = "/v1"
+    model_service_host: str = "127.0.0.1"
+    model_service_port: int = 19000
     model_service_auth_type: str = "bearer"
     model_service_auth_token: str = ""
     model_service_connect_timeout_seconds: int = 5
@@ -58,6 +60,10 @@ class Settings:
     session_ttl_seconds: int = 3_600
     file_ttl_seconds: int = 86_400
     memo_similarity_threshold: float = 0.85
+    model_max_concurrent_requests: int = 1
+    model_max_queue_size: int = 4
+    model_queue_timeout_seconds: int = 180
+    model_max_embedding_texts: int = 32
 
     @classmethod
     def from_env(cls, environ: dict[str, str] | None = None) -> "Settings":
@@ -80,6 +86,8 @@ class Settings:
                 "MODEL_SERVICE_BASE_URL", "https://model-server.example.invalid"
             ),
             model_service_api_prefix=env.get("MODEL_SERVICE_API_PREFIX", "/v1"),
+            model_service_host=env.get("MODEL_SERVICE_HOST", "127.0.0.1"),
+            model_service_port=_as_int(env.get("MODEL_SERVICE_PORT"), 19000),
             model_service_auth_type=env.get("MODEL_SERVICE_AUTH_TYPE", "bearer"),
             model_service_auth_token=env.get("MODEL_SERVICE_AUTH_TOKEN", ""),
             model_service_connect_timeout_seconds=_as_int(
@@ -93,11 +101,19 @@ class Settings:
             image_model_path=env.get("IMAGE_MODEL_PATH", ""),
             memo_embedding_model_path=env.get("MEMO_EMBEDDING_MODEL_PATH", ""),
             rag_embedding_model_path=env.get("RAG_EMBEDDING_MODEL_PATH", ""),
-            temp_dir=Path(env.get("TEMP_DIR") or Path.cwd() / ".deep-sea-explorer-tmp"),
+            temp_dir=Path(
+                env.get("TEMP_DIR")
+                or env.get("MODEL_TEMP_DIR")
+                or Path.cwd() / ".deep-sea-explorer-tmp"
+            ),
             report_font_path=env.get("REPORT_FONT_PATH", ""),
             cors_origins=origins,
             max_content_length_mb=_as_int(env.get("MAX_CONTENT_LENGTH_MB"), 50),
             memo_similarity_threshold=float(env.get("MEMO_SIMILARITY_THRESHOLD", "0.85")),
+            model_max_concurrent_requests=_as_int(env.get("MODEL_MAX_CONCURRENT_REQUESTS"), 1),
+            model_max_queue_size=_as_int(env.get("MODEL_MAX_QUEUE_SIZE"), 4),
+            model_queue_timeout_seconds=_as_int(env.get("MODEL_QUEUE_TIMEOUT_SECONDS"), 180),
+            model_max_embedding_texts=_as_int(env.get("MODEL_MAX_EMBEDDING_TEXTS"), 32),
         )
 
     def validate_for_runtime(self) -> list[str]:
@@ -123,4 +139,12 @@ class Settings:
                     errors.append(f"local mode requires {name}")
         if self.max_content_length_mb <= 0:
             errors.append("MAX_CONTENT_LENGTH_MB must be positive")
+        if self.model_max_concurrent_requests <= 0:
+            errors.append("MODEL_MAX_CONCURRENT_REQUESTS must be positive")
+        if self.model_max_queue_size < 0:
+            errors.append("MODEL_MAX_QUEUE_SIZE must not be negative")
+        if self.model_queue_timeout_seconds <= 0:
+            errors.append("MODEL_QUEUE_TIMEOUT_SECONDS must be positive")
+        if self.model_max_embedding_texts <= 0:
+            errors.append("MODEL_MAX_EMBEDDING_TEXTS must be positive")
         return errors

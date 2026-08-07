@@ -1,4 +1,4 @@
-# 本地环境与凭据：仅提交无敏感值模板。
+# 本地环境与凭据：只提交无敏感值模板。
 .env
 .env.*
 !.env.example
@@ -12,9 +12,17 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .coverage
+.coverage.*
 htmlcov/
 pytest-cache-files-*/
 .deep-sea-explorer-tmp/
+/.pytest-*/
+/.codex-*-report-test/
+/output/
+/tmp/
+/.tmp/
+/.p23-stage/
+/.rollback/
 
 # 本地构建与编辑器文件。
 build/
@@ -24,19 +32,18 @@ dist/
 venv/
 .idea/
 .vscode/
-docs/
+.DS_Store
+Thumbs.db
+Desktop.ini
 
-# Codex 本地元数据
+# Codex 本地元数据。
 .agents/
 .codex/
-
-# 演示视频暂不进入普通 Git 仓库
-/科普.mp4
-
-# Track the server deployment record only
-!docs/
-docs/*
-!docs/server-model-deployment-record.md
-
 .codex-ssh-askpass.cmd
-!docs/服务器端模型部署以及与开发机端项目连接的实施方案.md
+
+# 本地演示媒体和部署归档不进入普通 Git 仓库。
+/assets/demo/*.mp4
+/assets/demo/*.y4m
+/artifacts/deployment-archives/
+/*.tar.gz
+/*.mp4
