@@ -18,6 +18,12 @@ def video_analyze():
     prompt = question(request.form.get("question"), container.settings.max_question_length)
     frames = request.files.getlist("video")
     video_path = None
+    frame_results = []
+    if frames and not prompt:
+        # Monitoring receives independent JPEGs; it never assembles a short MP4.
+        for frame in frames:
+            frame_results.append(container.ingestion.ingest_frame(sid, frame.read(), container.monitoring))
+        return {"status": "frames_processed", "frames": len(frame_results), "results": frame_results}
     if frames:
         video_path = container.ingestion.ingest(sid, [frame.read() for frame in frames])
     if not prompt:

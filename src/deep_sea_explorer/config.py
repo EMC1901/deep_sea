@@ -49,9 +49,15 @@ class Settings:
     qwen_model_path: str = ""
     image_generation_enabled: bool = True
     image_model_path: str = ""
+    yolo_model_path: str = ""
+    yolo_confidence: float = 0.35
+    scene_change_threshold: float = 0.22
+    scene_confirm_frames: int = 3
+    track_confirm_frames: int = 3
     memo_embedding_model_path: str = ""
     rag_embedding_model_path: str = ""
     temp_dir: Path = Path.cwd() / ".deep-sea-explorer-tmp"
+    data_dir: Path = Path.cwd() / "data"
     report_font_path: str = ""
     cors_origins: tuple[str, ...] = ("http://localhost:8000",)
     max_content_length_mb: int = 50
@@ -101,6 +107,11 @@ class Settings:
             qwen_model_path=env.get("QWEN_MODEL_PATH", ""),
             image_generation_enabled=_as_bool(env.get("IMAGE_GENERATION_ENABLED"), True),
             image_model_path=env.get("IMAGE_MODEL_PATH", ""),
+            yolo_model_path=env.get("YOLO_MODEL_PATH", ""),
+            yolo_confidence=float(env.get("YOLO_CONFIDENCE", "0.35")),
+            scene_change_threshold=float(env.get("SCENE_CHANGE_THRESHOLD", "0.22")),
+            scene_confirm_frames=_as_int(env.get("SCENE_CONFIRM_FRAMES"), 3),
+            track_confirm_frames=_as_int(env.get("TRACK_CONFIRM_FRAMES"), 3),
             memo_embedding_model_path=env.get("MEMO_EMBEDDING_MODEL_PATH", ""),
             rag_embedding_model_path=env.get("RAG_EMBEDDING_MODEL_PATH", ""),
             temp_dir=Path(
@@ -108,6 +119,7 @@ class Settings:
                 or env.get("MODEL_TEMP_DIR")
                 or Path.cwd() / ".deep-sea-explorer-tmp"
             ),
+            data_dir=Path(env.get("DATA_DIR") or Path.cwd() / "data"),
             report_font_path=env.get("REPORT_FONT_PATH", ""),
             cors_origins=origins,
             max_content_length_mb=_as_int(env.get("MAX_CONTENT_LENGTH_MB"), 50),

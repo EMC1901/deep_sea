@@ -40,3 +40,18 @@ class VideoIngestionService:
             writer.release()
         self.sessions.get(session_id).latest_video = str(target)
         return target
+
+    def ingest_frame(self, session_id: str, frame: bytes, monitoring: object) -> dict[str, object]:
+        """Forward one browser JPEG to event-driven monitoring without creating a video."""
+        if not frame or len(frame) > 10 * 1024 * 1024:
+            raise ValidationError("frame is empty or too large")
+        try:
+            import cv2
+            import numpy as np
+
+            decoded = cv2.imdecode(np.frombuffer(frame, np.uint8), cv2.IMREAD_COLOR)
+        except ImportError as error:  # pragma: no cover
+            raise ValidationError("OpenCV is unavailable") from error
+        if decoded is None:
+            raise ValidationError("frame is not a valid JPEG")
+        return monitoring.process_frame(session_id, frame)

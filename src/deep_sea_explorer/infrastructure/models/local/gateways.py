@@ -8,6 +8,7 @@ from pathlib import Path
 from deep_sea_explorer.domain.enums import StreamEventType
 from deep_sea_explorer.domain.exceptions import ModelUnavailableError
 from deep_sea_explorer.domain.models import CaptureDecision, ModelHealth, StreamEvent
+from deep_sea_explorer.services.key_frame_detection import SurveyEventEvaluation
 
 from .adapters import EmbeddingAdapter, ImageAdapter, QwenAdapter
 from .runtime import LocalModelRuntime
@@ -26,6 +27,9 @@ class LocalVisionGateway:
 
     def evaluate_frame(self, image_path: Path) -> CaptureDecision:
         return self.runtime.invoke(self.adapter, lambda: self.adapter.evaluate_frame(image_path))
+
+    def evaluate_survey_event(self, reference_image: Path | None, current_image: Path, metadata: dict[str, object]) -> SurveyEventEvaluation:
+        return self.runtime.invoke(self.adapter, lambda: self.adapter.evaluate_survey_event(reference_image, current_image, metadata))
 
     def answer(self, video_path: Path, question: str) -> Iterator[StreamEvent]:
         for text in self.runtime.stream(self.adapter, lambda: self.adapter.answer_stream(video_path, question)):

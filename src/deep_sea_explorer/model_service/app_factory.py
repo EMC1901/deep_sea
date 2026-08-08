@@ -191,6 +191,35 @@ def _register_routes(app: Flask) -> None:
             }
         )
 
+    @app.post(f"{API_PREFIX}/vision/evaluate-survey-event")
+    def evaluate_survey_event() -> Response:
+        """Evaluate two JPEGs plus detector metadata; no video or embedding is involved."""
+        current = _save_uploaded_file("current_image")
+        reference = None
+        try:
+            if request.files.get("reference_image") is not None:
+                reference = _save_uploaded_file("reference_image")
+            raw_metadata = request.form.get("metadata", "{}")
+            try:
+                metadata = json.loads(raw_metadata)
+            except json.JSONDecodeError as error:
+                raise ApiProblem(400, "INVALID_INPUT", "metadata must be valid JSON") from error
+            if not isinstance(metadata, dict):
+                raise ApiProblem(400, "INVALID_INPUT", "metadata must be an object")
+            evaluation = _container().vision.evaluate_survey_event(reference, current, metadata)
+            return _json_response({
+                "survey_value": evaluation.survey_value,
+                "event_type": evaluation.event_type,
+                "scene_changed": evaluation.scene_changed,
+                "new_elements": list(evaluation.new_elements),
+                "description": evaluation.description,
+                "confidence": evaluation.confidence,
+            })
+        finally:
+            current.unlink(missing_ok=True)
+            if reference is not None:
+                reference.unlink(missing_ok=True)
+
     @app.post(f"{API_PREFIX}/vision/answer")
     def answer() -> Response:
         question = request.form.get("question", "").strip()
@@ -347,12 +376,17 @@ def _save_uploaded_file(kind: str) -> Path:
     if upload is None or not upload.filename:
         raise ApiProblem(400, "INVALID_INPUT", f"{kind} file is required")
     content_type = upload.mimetype.lower()
-    allowed = {"image": {"image/jpeg"}, "video": {"video/mp4", "video/x-msvideo", "video/quicktime"}}
+    allowed = {
+        "image": {"image/jpeg"},
+        "current_image": {"image/jpeg"},
+        "reference_image": {"image/jpeg"},
+        "video": {"video/mp4", "video/x-msvideo", "video/quicktime"},
+    }
     if content_type not in allowed[kind]:
         raise ApiProblem(415, "UNSUPPORTED_MEDIA_TYPE", f"{kind} media type is not supported")
     root = _settings().temp_dir.resolve()
     root.mkdir(parents=True, exist_ok=True)
-    suffix = ".jpg" if kind == "image" else ".mp4"
+    suffix = ".jpg" if kind in {"image", "current_image", "reference_image"} else ".mp4"
     target = (root / f"model-api-{uuid.uuid4().hex}{suffix}").resolve()
     if root not in target.parents:
         raise ApiProblem(500, "INTERNAL_ERROR", "temporary upload path is invalid")
@@ -372,7 +406,7 @@ def _verify_upload(path: Path, kind: str) -> None:
         import cv2  # type: ignore[import-not-found]
         import numpy as np
 
-        if kind == "image":
+        if kind in {"image", "current_image", "reference_image"}:
             data = path.read_bytes()
             if not data.startswith(b"\xff\xd8") or cv2.imdecode(
                 np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR
