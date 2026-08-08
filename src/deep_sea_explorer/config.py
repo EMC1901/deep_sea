@@ -47,6 +47,7 @@ class Settings:
     model_service_read_timeout_seconds: int = 120
     model_service_verify_tls: bool = True
     qwen_model_path: str = ""
+    image_generation_enabled: bool = True
     image_model_path: str = ""
     memo_embedding_model_path: str = ""
     rag_embedding_model_path: str = ""
@@ -98,6 +99,7 @@ class Settings:
             ),
             model_service_verify_tls=_as_bool(env.get("MODEL_SERVICE_VERIFY_TLS"), True),
             qwen_model_path=env.get("QWEN_MODEL_PATH", ""),
+            image_generation_enabled=_as_bool(env.get("IMAGE_GENERATION_ENABLED"), True),
             image_model_path=env.get("IMAGE_MODEL_PATH", ""),
             memo_embedding_model_path=env.get("MEMO_EMBEDDING_MODEL_PATH", ""),
             rag_embedding_model_path=env.get("RAG_EMBEDDING_MODEL_PATH", ""),
@@ -131,12 +133,13 @@ class Settings:
         if self.model_backend is ModelBackend.LOCAL:
             for name, path in (
                 ("QWEN_MODEL_PATH", self.qwen_model_path),
-                ("IMAGE_MODEL_PATH", self.image_model_path),
                 ("MEMO_EMBEDDING_MODEL_PATH", self.memo_embedding_model_path),
                 ("RAG_EMBEDDING_MODEL_PATH", self.rag_embedding_model_path),
             ):
                 if not path:
                     errors.append(f"local mode requires {name}")
+            if self.image_generation_enabled and not self.image_model_path:
+                errors.append("local mode requires IMAGE_MODEL_PATH when image generation is enabled")
         if self.max_content_length_mb <= 0:
             errors.append("MAX_CONTENT_LENGTH_MB must be positive")
         if self.model_max_concurrent_requests <= 0:

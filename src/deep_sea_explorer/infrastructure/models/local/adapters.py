@@ -259,6 +259,11 @@ class QwenAdapter(LocalAdapter):
             capture.release()
         if not frames:
             raise InvalidModelInput("video has no readable frames")
+        # The Qwen3-VL video processor needs at least two temporal frames.
+        # Browser monitoring uploads one still frame per capture, so preserve
+        # that contract by representing a still as two identical frames.
+        if len(frames) == 1:
+            frames.append(frames[0].copy())
         return np.stack(frames)
 
 

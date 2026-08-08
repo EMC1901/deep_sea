@@ -88,6 +88,13 @@ class ReportLabRenderer:
             leading=13,
             spaceAfter=0,
         )
+        metadata_value_style = ParagraphStyle(
+            "DeepSeaMetadataValue",
+            parent=table_style,
+            # Keep timestamps and IDs searchable even when Chinese content is
+            # rendered by the built-in CID fallback font.
+            fontName="Helvetica",
+        )
         table_header_style = ParagraphStyle(
             "DeepSeaTableHeader",
             parent=table_style,
@@ -118,15 +125,15 @@ class ReportLabRenderer:
         header_data = [
             [
                 self._paragraph("报告生成时间", table_style),
-                self._paragraph(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), table_style),
+                self._paragraph(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), metadata_value_style),
             ],
             [
                 self._paragraph("任务时间范围", table_style),
-                self._paragraph(meta.get("time_range", "-"), table_style),
+                self._paragraph(meta.get("time_range", "-"), metadata_value_style),
             ],
             [
                 self._paragraph("任务会话", table_style),
-                self._paragraph(meta.get("session_id", "-"), table_style),
+                self._paragraph(meta.get("session_id", "-"), metadata_value_style),
             ],
         ]
         header = Table(header_data, colWidths=[32 * mm, 138 * mm], hAlign="CENTER")
@@ -190,7 +197,7 @@ class ReportLabRenderer:
             for memo in memos[:200]:
                 memo_rows.append(
                     [
-                        self._paragraph(str(memo.get("time", "-"))[:8], table_style),
+                        self._paragraph(str(memo.get("time", "-"))[:8], metadata_value_style),
                         self._paragraph(
                             memo.get("text") or memo.get("content") or "-",
                             table_style,
@@ -280,10 +287,11 @@ class ReportLabRenderer:
             canvas.setFillColor(colors.HexColor("#526D7A"))
             canvas.setFont(self.font_name, 8)
             canvas.drawString(15 * mm, 8 * mm, "Deep Sea Explorer")
+            canvas.setFont("Helvetica", 8)
             canvas.drawRightString(
                 A4[0] - 15 * mm,
                 8 * mm,
-                f"第 {current_doc.page} 页",
+                f"Page {current_doc.page}",
             )
             canvas.restoreState()
 
@@ -292,6 +300,7 @@ class ReportLabRenderer:
 
     def _register_font(self, configured_path: str) -> str:
         from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
         from reportlab.pdfbase.ttfonts import TTFont
 
         font_name = "DeepSeaCJK"
@@ -321,8 +330,14 @@ class ReportLabRenderer:
                     path,
                     type(error).__name__,
                 )
-        LOGGER.warning("report CJK font unavailable; falling back to Helvetica")
-        return "Helvetica"
+        # Linux installations commonly provide CJK fonts as .ttc collections,
+        # which ReportLab's TTFont loader cannot read. Its built-in CID font
+        # keeps Chinese titles, labels, and timestamps visible in that case.
+        cid_font_name = "STSong-Light"
+        if cid_font_name not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(UnicodeCIDFont(cid_font_name))
+        LOGGER.warning("report CJK font unavailable; using built-in CID font")
+        return cid_font_name
 
     @staticmethod
     def _records(value: object) -> list[dict[str, object]]:

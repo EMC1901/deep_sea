@@ -25,6 +25,7 @@ def test_pyproject_separates_remote_and_local_model_dependencies() -> None:
     assert extras["remote"] == []
     assert {
         "torch",
+        "torchvision==0.21.0",
         "transformers==4.57.1",
         "modelscope",
         "sentence-transformers",
@@ -48,6 +49,10 @@ def test_environment_templates_keep_remote_development_disabled_by_default() -> 
     assert server["MODEL_SERVICE_ENABLED"] == "false"
     assert server["MODEL_SERVICE_HOST"] == "127.0.0.1"
     assert server["MODEL_SERVICE_PORT"] == "19000"
+    assert server["IMAGE_GENERATION_ENABLED"] == "false"
+    assert server["API_HOST"] == "127.0.0.1"
+    assert server["SPEECH_HOST"] == "127.0.0.1"
+    assert "http://127.0.0.1:19100" in server["CORS_ORIGINS"]
     assert server["MODEL_MAX_CONCURRENT_REQUESTS"] == "1"
     assert server["MODEL_MAX_QUEUE_SIZE"] == "4"
     assert server["MODEL_MAX_EMBEDDING_TEXTS"] == "32"
@@ -116,3 +121,13 @@ def test_model_service_tunnel_is_local_only_and_does_not_embed_credentials() -> 
     assert "ServerAliveInterval=30" in script
     assert "Authorization" not in script
     assert "MODEL_SERVICE_AUTH_TOKEN" not in script
+
+
+def test_private_server_tunnel_uses_a_user_supplied_identity_file() -> None:
+    script = (PROJECT_ROOT / "scripts" / "start-private-server-tunnel.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert '"-i", $IdentityFile' in script
+    assert '"127.0.0.1:$LocalPort`:127.0.0.1:$RemotePort"' in script
+    assert "ExitOnForwardFailure=yes" in script

@@ -15,6 +15,7 @@ from deep_sea_explorer.infrastructure.models.local.errors import (
     ModelOutputInvalid,
 )
 from deep_sea_explorer.infrastructure.models.local.gateways import (
+    DisabledImageGateway,
     LocalEmbeddingGateway,
     LocalImageGateway,
     LocalVisionGateway,
@@ -42,6 +43,21 @@ class RecordingAdapter:
 
     def health(self) -> ModelHealth:
         return ModelHealth(self.ready, "ready" if self.ready else "not_loaded")
+
+
+def test_video_frame_reader_duplicates_a_single_frame_for_qwen(tmp_path: Path) -> None:
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    video = tmp_path / "single-frame.mp4"
+    writer = cv2.VideoWriter(str(video), cv2.VideoWriter_fourcc(*"mp4v"), 4, (32, 32))
+    assert writer.isOpened()
+    writer.write(np.full((32, 32, 3), 127, dtype=np.uint8))
+    writer.release()
+
+    frames = QwenAdapter._video_frames(video)
+
+    assert frames.shape[0] == 2
+    assert np.array_equal(frames[0], frames[1])
 
 
 def test_runtime_reuses_current_model_and_unloads_before_switching() -> None:
@@ -259,3 +275,16 @@ def test_local_container_constructs_real_gateways_without_model_imports() -> Non
     assert isinstance(container.image, LocalImageGateway)
     assert isinstance(container.memo_embedding, LocalEmbeddingGateway)
     assert isinstance(container.rag_embedding, LocalEmbeddingGateway)
+
+
+def test_local_container_can_disable_image_generation_without_an_image_model() -> None:
+    settings = Settings(
+        model_backend=ModelBackend.LOCAL,
+        qwen_model_path="/models/qwen",
+        image_generation_enabled=False,
+        memo_embedding_model_path="/models/gte",
+        rag_embedding_model_path="/models/minilm",
+    )
+
+    assert settings.validate_for_runtime() == []
+    assert isinstance(build_local_container(settings).image, DisabledImageGateway)

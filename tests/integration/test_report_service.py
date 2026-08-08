@@ -84,6 +84,9 @@ def test_complete_report_contains_original_sections_images_and_page_numbers() ->
 
         for heading in (
             "深海探测任务综合报告",
+            "报告生成时间",
+            "任务时间范围",
+            "任务会话",
             "一、智能任务总结",
             "二、生物探测结果",
             "三、底质与环境探测结果",
@@ -93,7 +96,7 @@ def test_complete_report_contains_original_sections_images_and_page_numbers() ->
         ):
             assert heading in text
         assert "20:50:34 - 20:52:08" in text
-        assert "第 1 页" in text
+        assert "Page 1" in text
         # ReportLab reuses identical images as one PDF XObject on a page.
         assert image_count >= 2
     finally:

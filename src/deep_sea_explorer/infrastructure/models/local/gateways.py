@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from deep_sea_explorer.domain.enums import StreamEventType
+from deep_sea_explorer.domain.exceptions import ModelUnavailableError
 from deep_sea_explorer.domain.models import CaptureDecision, ModelHealth, StreamEvent
 
 from .adapters import EmbeddingAdapter, ImageAdapter, QwenAdapter
@@ -45,6 +46,16 @@ class LocalImageGateway:
 
     def health(self) -> ModelHealth:
         return self.runtime.health(self.adapter)
+
+
+class DisabledImageGateway:
+    """Reject image requests without loading an image model."""
+
+    def generate(self, prompt: str) -> bytes:
+        raise ModelUnavailableError("image generation is disabled")
+
+    def health(self) -> ModelHealth:
+        return ModelHealth(False, "disabled")
 
 
 class LocalEmbeddingGateway:

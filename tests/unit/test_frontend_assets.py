@@ -15,6 +15,7 @@ def test_frontend_uses_runtime_configuration_and_safe_dom_helper() -> None:
     assert "apiBaseUrl" in config
     assert "textContent" in helper
     assert "isSafeImageSource" in helper
+    assert 'headers: { "X-Session-ID": state.sessionId }' in page
 
 
 def test_login_page_is_explicitly_marked_as_a_demo() -> None:

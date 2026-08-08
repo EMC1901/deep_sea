@@ -23,6 +23,10 @@ pytest-cache-files-*/
 /.tmp/
 /.p23-stage/
 /.rollback/
+/runtime/
+/runtime-tmp/
+/logs/
+/.hf-cache/
 
 # 本地构建与编辑器文件。
 build/

@@ -14,6 +14,7 @@ from deep_sea_explorer.infrastructure.models.local.adapters import (
     QwenAdapter,
 )
 from deep_sea_explorer.infrastructure.models.local.gateways import (
+    DisabledImageGateway,
     LocalEmbeddingGateway,
     LocalImageGateway,
     LocalVisionGateway,
@@ -118,10 +119,15 @@ def build_local_container(settings: Settings) -> ApplicationContainer:
             settings.model_queue_timeout_seconds,
         )
     )
+    image = (
+        LocalImageGateway(runtime, ImageAdapter(settings.image_model_path))
+        if settings.image_generation_enabled
+        else DisabledImageGateway()
+    )
     return _build(
         settings,
         LocalVisionGateway(runtime, QwenAdapter(settings.qwen_model_path)),
-        LocalImageGateway(runtime, ImageAdapter(settings.image_model_path)),
+        image,
         LocalEmbeddingGateway(
             runtime,
             EmbeddingAdapter("gte", settings.memo_embedding_model_path, 768, trust_remote_code=True),

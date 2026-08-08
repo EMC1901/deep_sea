@@ -1,4 +1,4 @@
-"""Server-only S8 verification: call all four models through local gateways."""
+"""Server-only S8 verification: call configured local model gateways."""
 
 from __future__ import annotations
 
@@ -45,17 +45,21 @@ def main() -> int:
         description = container.vision.describe_video(video_path)
         memo = container.memo_embedding.embed(["deep sea observation"])
         rag = container.rag_embedding.embed(["deep sea observation"])
-        image = container.image.generate("scientific illustration of a deep sea hydrothermal vent")
+        image_jpeg = None
+        if settings.image_generation_enabled:
+            image = container.image.generate("scientific illustration of a deep sea hydrothermal vent")
+            image_jpeg = image.startswith(b"\xff\xd8")
         if not description.strip() or len(memo[0]) != 768 or len(rag[0]) != 384:
             raise RuntimeError("S8 local model output validation failed")
-        if not image.startswith(b"\xff\xd8"):
+        if settings.image_generation_enabled and not image_jpeg:
             raise RuntimeError("S8 local image output is not JPEG")
         result = {
             "status": "passed",
             "qwen_text": True,
             "gte_dimension": len(memo[0]),
             "minilm_dimension": len(rag[0]),
-            "image_jpeg": True,
+            "image_generation_enabled": settings.image_generation_enabled,
+            "image_jpeg": image_jpeg,
         }
         return 0
     except Exception as error:

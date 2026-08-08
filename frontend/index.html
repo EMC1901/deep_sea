@@ -1781,7 +1781,11 @@
     async function fetchMemos() {
         if (!state.isMonitoring) return;
         try {
-            const res = await fetch(`${CONFIG.API_HOST}/memos`);
+            // The broker drains messages on read, so each browser must request
+            // only its own session rather than consuming another user's memo.
+            const res = await fetch(`${CONFIG.API_HOST}/memos`, {
+                headers: { "X-Session-ID": state.sessionId }
+            });
             if (!res.ok) return;
             const data = await res.json();
 
