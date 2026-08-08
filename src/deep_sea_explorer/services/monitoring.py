@@ -5,9 +5,18 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from collections.abc import Callable
+from dataclasses import asdict
 from typing import TypeVar
 
 from deep_sea_explorer.domain.models import Capture, Memo, SessionState
+from deep_sea_explorer.infrastructure.storage.event_store import EventStore
+from deep_sea_explorer.services.candidate_queue import PerSessionEventQueue
+from deep_sea_explorer.services.key_frame_detection import (
+    ByteTrackState,
+    NullObjectDetector,
+    SceneChangeDetector,
+    make_candidate,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -24,6 +33,9 @@ class MonitoringService:
         files: object,
         stats: object,
         threshold: float,
+        detector: object | None = None,
+        scene_detector: SceneChangeDetector | None = None,
+        event_store: EventStore | None = None,
     ) -> None:
         (
             self.vision,
@@ -34,6 +46,70 @@ class MonitoringService:
             self.stats,
             self.threshold,
         ) = vision, embedding, sessions, broker, files, stats, threshold
+        self.detector = detector or NullObjectDetector()
+        self.scene_detector = scene_detector or SceneChangeDetector()
+        self.event_store = event_store or EventStore(files.root / "data")
+        self._trackers: dict[str, ByteTrackState] = {}
+        self._confirmed_tracks: dict[str, set[int]] = {}
+        self._scene_detectors: dict[str, SceneChangeDetector] = {}
+        self._queues = PerSessionEventQueue(self._evaluate_candidate, self._complete_candidate)
+
+    def process_frame(self, session_id: str, frame: bytes | Path) -> dict[str, object]:
+        """Ingest one JPEG and emit at most one replaceable candidate per session."""
+        state = self.sessions.get(session_id)
+        frame_path = self.files.frame_path(session_id)
+        try:
+            if isinstance(frame, Path):
+                frame_path.write_bytes(frame.read_bytes())
+            else:
+                frame_path.write_bytes(frame)
+            if not frame_path.read_bytes().startswith(b"\xff\xd8"):
+                raise ValueError("frame must be a JPEG")
+            tracker = self._trackers.setdefault(session_id, ByteTrackState())
+            detections = self.detector.detect(frame_path)
+            tracks, _ = tracker.update(detections)
+            confirmed = self._confirmed_tracks.setdefault(session_id, set())
+            new_tracks = [track for track in tracks if track.continuous_frames >= tracker.confirm_frames and track.track_id not in confirmed]
+            confirmed.update(track.track_id for track in new_tracks)
+            scene_detector = self._scene_detectors.setdefault(session_id, SceneChangeDetector(self.scene_detector.threshold, self.scene_detector.confirm_frames))
+            reference = Path(state.last_scene_reference) if state.last_scene_reference else scene_detector.reference
+            metrics = scene_detector.compare(frame_path, reference)
+            trigger_parts = []
+            if new_tracks:
+                trigger_parts.append("yolo")
+            if metrics.changed:
+                trigger_parts.append("scene")
+            if not trigger_parts:
+                return {"status": "monitoring", "candidate": False, "scene_change_metrics": asdict(metrics)}
+            candidate = make_candidate(session_id, frame_path, reference, new_tracks, metrics, "+".join(trigger_parts))
+            candidate_path = self.event_store.save_candidate(candidate)
+            candidate = candidate.__class__(candidate.candidate_id, candidate.session_id, candidate.captured_at, candidate_path, candidate.reference_image_path, candidate.yolo_changes, candidate.scene_change_metrics, candidate.trigger_type, candidate.signature)
+            state.pending_candidate = candidate
+            state.model_task_in_flight = self._queues.state(session_id)[0]
+            self._queues.submit(candidate)
+            state.model_task_in_flight = True
+            return {"status": "candidate_pending", "candidate": True, "candidate_id": candidate.candidate_id, "scene_change_metrics": asdict(metrics)}
+        finally:
+            frame_path.unlink(missing_ok=True)
+
+    def _evaluate_candidate(self, candidate):
+        metadata = {"yolo_changes": list(candidate.yolo_changes), "scene_change_metrics": candidate.scene_change_metrics, "trigger_type": candidate.trigger_type}
+        return self.vision.evaluate_survey_event(candidate.reference_image_path, candidate.current_image_path, metadata)
+
+    def _complete_candidate(self, candidate, evaluation) -> None:
+        state = self.sessions.get(candidate.session_id)
+        state.model_task_in_flight = False
+        state.last_model_call_time = datetime.now().timestamp()
+        state.pending_candidate = None
+        accepted = evaluation.survey_value and evaluation.event_type in {"new_element", "major_scene_change"} and bool(evaluation.new_elements or evaluation.scene_changed)
+        if not accepted or state.active_event_signature == candidate.signature:
+            return
+        image_path = self.event_store.accept(candidate, evaluation)
+        state.active_event_signature = candidate.signature
+        state.last_accepted_frame = str(image_path)
+        state.last_scene_reference = str(candidate.current_image_path)
+        self._scene_detectors.setdefault(candidate.session_id, self.scene_detector).accept(candidate.current_image_path)
+        self.broker.publish(Memo(datetime.now().strftime("%H:%M:%S"), evaluation.description, candidate.session_id))
 
     def process_session(self, session_id: str) -> Memo | None:
         state = self.sessions.get(session_id)

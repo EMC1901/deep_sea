@@ -13,6 +13,7 @@ from typing import Any
 
 from deep_sea_explorer.domain.enums import CaptureType
 from deep_sea_explorer.domain.models import CaptureDecision, CountItem, ModelHealth
+from deep_sea_explorer.services.key_frame_detection import SurveyEventEvaluation
 from deep_sea_explorer.domain.report_material import compact_report_material
 
 from .errors import InvalidModelInput, ModelLoadFailure, ModelNotConfigured, ModelOutputInvalid
@@ -201,6 +202,28 @@ class QwenAdapter(LocalAdapter):
             ]
         )
         return _capture_decision(raw)
+
+    def evaluate_survey_event(self, reference_image: Path | None, current_image: Path, metadata: dict[str, object]) -> SurveyEventEvaluation:
+        if not current_image.is_file():
+            raise InvalidModelInput("candidate image does not exist")
+        content: list[dict[str, object]] = []
+        if reference_image is not None and reference_image.is_file():
+            from PIL import Image  # type: ignore[import-not-found]
+            with Image.open(reference_image) as source:
+                content.append({"type": "image", "image": source.convert("RGB")})
+        from PIL import Image  # type: ignore[import-not-found]
+        with Image.open(current_image) as source:
+            content.append({"type": "image", "image": source.convert("RGB")})
+        content.append({"type": "text", "text": "请根据两张海底图像和检测元数据判断是否存在具有调查价值的新要素或重大场景变化。只输出JSON，字段survey_value、event_type(new_element/major_scene_change/none)、scene_changed、new_elements(含category/name/is_new)、description、confidence。元数据：" + json.dumps(metadata, ensure_ascii=False)})
+        raw = self._generate(content)
+        start, end = raw.find("{"), raw.rfind("}")
+        if start < 0 or end <= start:
+            raise ModelOutputInvalid("survey event response is not JSON")
+        try:
+            value = json.loads(raw[start : end + 1])
+            return SurveyEventEvaluation(bool(value.get("survey_value")), str(value.get("event_type", "none")), bool(value.get("scene_changed")), tuple(value.get("new_elements") or ()), str(value.get("description", "")), float(value.get("confidence", 0.0)))
+        except (TypeError, ValueError, json.JSONDecodeError) as error:
+            raise ModelOutputInvalid("survey event response is invalid") from error
 
     def _generate(
         self,

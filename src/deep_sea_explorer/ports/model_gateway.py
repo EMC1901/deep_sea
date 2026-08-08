@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Protocol
 
 from deep_sea_explorer.domain.models import CaptureDecision, ModelHealth, StreamEvent
+from deep_sea_explorer.services.key_frame_detection import SurveyEventEvaluation
 
 
 class VisionModelGateway(Protocol):
@@ -13,6 +14,9 @@ class VisionModelGateway(Protocol):
     def evaluate_frame(self, image_path: Path) -> CaptureDecision: ...
     def answer(self, video_path: Path, question: str) -> Iterator[StreamEvent]: ...
     def summarize_report(self, material: dict[str, object]) -> str: ...
+    def evaluate_survey_event(
+        self, reference_image: Path | None, current_image: Path, metadata: dict[str, object]
+    ) -> SurveyEventEvaluation: ...
 
 
 class ImageGenerationGateway(Protocol):

@@ -70,3 +70,12 @@ class SessionState:
         default_factory=lambda: {"bio": {}, "env": {}}
     )
     last_active_monotonic: float = 0.0
+    # Event-driven monitoring state. Kept on the session so one process can resume
+    # tracking immediately after a model task completes.
+    active_tracks: dict[int, object] = field(default_factory=dict)
+    last_scene_reference: str | None = None
+    last_accepted_frame: str | None = None
+    active_event_signature: str | None = None
+    model_task_in_flight: bool = False
+    pending_candidate: object | None = None
+    last_model_call_time: float | None = None

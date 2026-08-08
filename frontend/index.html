@@ -2120,12 +2120,10 @@
 
     async function pushFramesSilently() {
         if (!state.isMonitoring) return;
-        if (state.framesBuffer.length < 5) return;
+        if (state.framesBuffer.length < 1) return;
         const formData = new FormData();
-        const framesToSend = state.framesBuffer.slice(-15);
-        framesToSend.forEach((f, index) => {
-            formData.append('video', new Blob([f], { type: 'image/jpeg' }), `frame_${index}.jpg`);
-        });
+        const latest = state.framesBuffer[state.framesBuffer.length - 1];
+        formData.append('video', new Blob([latest], { type: 'image/jpeg' }), 'frame.jpg');
         try {
             await fetch(`${CONFIG.API_HOST}/videoanalyze`, {
                 method: "POST", headers: { "X-Session-ID": state.sessionId }, body: formData

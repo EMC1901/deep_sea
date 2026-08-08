@@ -31,12 +31,14 @@ from deep_sea_explorer.infrastructure.reports.reportlab_renderer import ReportLa
 from deep_sea_explorer.infrastructure.storage.memory_memo import MemoryMemoBroker
 from deep_sea_explorer.infrastructure.storage.memory_session import MemorySessionStore
 from deep_sea_explorer.infrastructure.storage.temp_file_store import TempFileStore
+from deep_sea_explorer.infrastructure.storage.event_store import EventStore
 from deep_sea_explorer.services.capture_stats import CaptureStatsService
 from deep_sea_explorer.services.monitoring import MonitoringService
 from deep_sea_explorer.services.question_answering import QuestionAnsweringService
 from deep_sea_explorer.services.rag_service import RagService
 from deep_sea_explorer.services.report_service import ReportService
 from deep_sea_explorer.services.video_ingestion import VideoIngestionService
+from deep_sea_explorer.services.key_frame_detection import SceneChangeDetector, YoloObjectDetector, NullObjectDetector
 from deep_sea_explorer.workers.memo_worker import MemoWorker
 
 
@@ -67,8 +69,14 @@ def _build(
     stats = CaptureStatsService()
     ingestion = VideoIngestionService(files, sessions, settings.max_frames_per_request)
     rag = RagService(rag_embedding)
+    detector = NullObjectDetector()
+    if settings.yolo_model_path:
+        detector = YoloObjectDetector(settings.yolo_model_path, settings.yolo_confidence)
     monitoring = MonitoringService(
-        vision, memo_embedding, sessions, memos, files, stats, settings.memo_similarity_threshold
+        vision, memo_embedding, sessions, memos, files, stats, settings.memo_similarity_threshold,
+        detector=detector,
+        scene_detector=SceneChangeDetector(settings.scene_change_threshold, settings.scene_confirm_frames),
+        event_store=EventStore(settings.data_dir),
     )
     questions = QuestionAnsweringService(vision, image, rag, sessions)
     reports = ReportService(vision, ReportLabRenderer(settings.report_font_path), files)

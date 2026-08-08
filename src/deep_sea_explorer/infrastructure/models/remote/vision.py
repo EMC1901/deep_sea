@@ -7,6 +7,7 @@ from pathlib import Path
 from deep_sea_explorer.domain.enums import CaptureType, StreamEventType
 from deep_sea_explorer.domain.exceptions import ModelUnavailableError
 from deep_sea_explorer.domain.models import CaptureDecision, CountItem, ModelHealth, StreamEvent
+from deep_sea_explorer.services.key_frame_detection import SurveyEventEvaluation
 
 from .client import RemoteModelClient
 
@@ -105,3 +106,13 @@ class RemoteVisionGateway:
         if not isinstance(text, str):
             raise ModelUnavailableError("remote report summary is invalid")
         return text
+
+    def evaluate_survey_event(self, reference_image: Path | None, current_image: Path, metadata: dict[str, object]) -> SurveyEventEvaluation:
+        files = self._file(current_image, "current_image", "image/jpeg")
+        if reference_image is not None and reference_image.is_file():
+            files.update(self._file(reference_image, "reference_image", "image/jpeg"))
+        body = self.client.json_body(self.client.request("POST", "/vision/evaluate-survey-event", files=files, data={"metadata": json.dumps(metadata, ensure_ascii=False)}))
+        try:
+            return SurveyEventEvaluation(bool(body["survey_value"]), str(body["event_type"]), bool(body.get("scene_changed")), tuple(body.get("new_elements") or ()), str(body.get("description", "")), float(body.get("confidence", 0.0)))
+        except (KeyError, TypeError, ValueError) as error:
+            raise ModelUnavailableError("remote survey event response is invalid") from error
