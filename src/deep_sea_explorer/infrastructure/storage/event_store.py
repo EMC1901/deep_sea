@@ -39,6 +39,13 @@ class EventStore:
         shutil.copy2(candidate.current_image_path, target)
         return target
 
+    def save_reference(self, session_id: str, source: Path) -> Path:
+        target_dir = self.candidate_root / session_id
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = target_dir / "scene-reference.jpg"
+        shutil.copy2(source, target)
+        return target
+
     def accept(self, candidate: CandidateEvent, evaluation: SurveyEventEvaluation, source: Path | None = None) -> Path:
         source = source or candidate.current_image_path
         target_dir = self.capture_root / candidate.session_id
@@ -63,4 +70,3 @@ class EventStore:
             connection.row_factory = sqlite3.Row
             rows = connection.execute("SELECT * FROM events WHERE session_id=? ORDER BY event_time", (session_id,)).fetchall()
         return [dict(row) for row in rows]
-

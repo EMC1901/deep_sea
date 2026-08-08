@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import threading
+import logging
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Callable
 
 from deep_sea_explorer.services.key_frame_detection import CandidateEvent, SurveyEventEvaluation
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -42,6 +45,8 @@ class PerSessionEventQueue:
         try:
             evaluation = future.result()
             self.on_result(candidate, evaluation)
+        except Exception as error:
+            LOGGER.warning("survey event evaluation failed session_id=%s error_type=%s", candidate.session_id, type(error).__name__)
         finally:
             with self._lock:
                 queue = self._queues.get(candidate.session_id)

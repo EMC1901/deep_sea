@@ -73,7 +73,11 @@ class MonitoringService:
             confirmed.update(track.track_id for track in new_tracks)
             scene_detector = self._scene_detectors.setdefault(session_id, SceneChangeDetector(self.scene_detector.threshold, self.scene_detector.confirm_frames))
             reference = Path(state.last_scene_reference) if state.last_scene_reference else scene_detector.reference
+            had_reference = reference is not None and reference.is_file()
             metrics = scene_detector.compare(frame_path, reference)
+            if not had_reference:
+                reference = self.event_store.save_reference(session_id, frame_path)
+                scene_detector.accept(reference)
             trigger_parts = []
             if new_tracks:
                 trigger_parts.append("yolo")
