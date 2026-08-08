@@ -229,4 +229,3 @@ def make_candidate(session_id: str, image_path: Path, reference: Path | None, tr
     signature_input = f"{trigger_type}|{','.join(str(t.track_id) for t in tracks)}|{visual_fingerprint(image_path)}"
     signature = hashlib.sha256(signature_input.encode()).hexdigest()[:32]
     return CandidateEvent(str(uuid.uuid4()), session_id, time.time(), image_path, reference, yolo_changes, {"phash_distance": metrics.phash_distance, "hsv_distance": metrics.hsv_distance, "edge_distance": metrics.edge_distance, "grid_distance": metrics.grid_distance, "changed": metrics.changed, "confirmed_frames": metrics.confirmed_frames}, trigger_type, signature)
-
