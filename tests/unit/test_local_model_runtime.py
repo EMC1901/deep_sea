@@ -8,7 +8,11 @@ import pytest
 from deep_sea_explorer.config import ModelBackend, Settings
 from deep_sea_explorer.container import build_local_container
 from deep_sea_explorer.domain.models import ModelHealth
-from deep_sea_explorer.infrastructure.models.local.adapters import QwenAdapter, _capture_decision
+from deep_sea_explorer.infrastructure.models.local.adapters import (
+    QwenAdapter,
+    _capture_decision,
+    _survey_event_evaluation,
+)
 from deep_sea_explorer.infrastructure.models.local.errors import (
     GpuOutOfMemory,
     InferenceQueueFull,
@@ -162,6 +166,22 @@ def test_frame_decision_still_rejects_unusable_count_items() -> None:
         _capture_decision(
             '{"is_deepsea": true, "is_typical": true, "category": "env", '
             '"description": "seafloor", "organisms": [], "env_features": [42]}'
+        )
+
+
+def test_survey_event_requires_a_valid_structured_change() -> None:
+    evaluation = _survey_event_evaluation(
+        '{"survey_value": true, "event_type": "new_element", "scene_changed": false, '
+        '"new_elements": [{"category": "organism", "name": "深海鱼", "is_new": true}], '
+        '"description": "候选画面中出现新的深海鱼。", "confidence": 0.91}'
+    )
+    assert evaluation.survey_value is True
+    assert evaluation.new_elements[0]["name"] == "深海鱼"
+
+    with pytest.raises(ModelOutputInvalid):
+        _survey_event_evaluation(
+            '{"survey_value": "false", "event_type": "major_scene_change", '
+            '"scene_changed": false, "new_elements": [], "description": "无变化", "confidence": 0.4}'
         )
 
 

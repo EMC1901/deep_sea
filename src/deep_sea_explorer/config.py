@@ -59,7 +59,11 @@ class Settings:
     temp_dir: Path = Path.cwd() / ".deep-sea-explorer-tmp"
     data_dir: Path = Path.cwd() / "data"
     report_font_path: str = ""
-    cors_origins: tuple[str, ...] = ("http://localhost:8000",)
+    cors_origins: tuple[str, ...] = (
+        "http://127.0.0.1:19100",
+        "http://localhost:19100",
+        "http://localhost:8000",
+    )
     max_content_length_mb: int = 50
     max_frames_per_request: int = 150
     max_question_length: int = 4_000
@@ -78,7 +82,9 @@ class Settings:
         backend = ModelBackend(env.get("MODEL_BACKEND", ModelBackend.REMOTE))
         origins = tuple(
             value.strip()
-            for value in env.get("CORS_ORIGINS", "http://localhost:8000").split(",")
+            for value in env.get(
+                "CORS_ORIGINS", "http://127.0.0.1:19100,http://localhost:19100,http://localhost:8000"
+            ).split(",")
             if value.strip()
         )
         return cls(
