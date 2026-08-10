@@ -212,6 +212,7 @@ def _register_routes(app: Flask) -> None:
                 "event_type": evaluation.event_type,
                 "scene_changed": evaluation.scene_changed,
                 "new_elements": list(evaluation.new_elements),
+                "observed_elements": list(evaluation.observed_elements),
                 "description": evaluation.description,
                 "confidence": evaluation.confidence,
             })

@@ -178,6 +178,20 @@ def test_survey_event_requires_a_valid_structured_change() -> None:
     assert evaluation.survey_value is True
     assert evaluation.new_elements[0]["name"] == "深海鱼"
 
+    lora_evaluation = _survey_event_evaluation(
+        '{"survey_value": true, "event_type": "new_element", '
+        '"new_elements": [{"category": "organism", "name": "鱼", "is_new": true}], '
+        '"description": "该场景包含一条鱼。", "confidence": 0.91}'
+    )
+    assert lora_evaluation.scene_changed is True
+
+    normalized_lora_evaluation = _survey_event_evaluation(
+        '{"survey_value": true, "event_type": "none", '
+        '"new_elements": [{"category": "organism", "name": "鱼", "is_new": true}], '
+        '"description": "场景显示一条鱼在深海沉积物附近游动。", "confidence": 0.99}'
+    )
+    assert normalized_lora_evaluation.event_type == "new_element"
+
     with pytest.raises(ModelOutputInvalid):
         _survey_event_evaluation(
             '{"survey_value": "false", "event_type": "major_scene_change", '
@@ -295,6 +309,22 @@ def test_local_container_constructs_real_gateways_without_model_imports() -> Non
     assert isinstance(container.image, LocalImageGateway)
     assert isinstance(container.memo_embedding, LocalEmbeddingGateway)
     assert isinstance(container.rag_embedding, LocalEmbeddingGateway)
+
+
+def test_local_container_passes_the_optional_qwen_lora_adapter() -> None:
+    settings = Settings(
+        model_backend=ModelBackend.LOCAL,
+        qwen_model_path="/models/qwen",
+        qwen_adapter_path="/models/qwen-lora",
+        image_generation_enabled=False,
+        memo_embedding_model_path="/models/gte",
+        rag_embedding_model_path="/models/minilm",
+    )
+
+    container = build_local_container(settings)
+
+    assert isinstance(container.vision, LocalVisionGateway)
+    assert container.vision.adapter.adapter_path == Path("/models/qwen-lora")
 
 
 def test_local_container_can_disable_image_generation_without_an_image_model() -> None:

@@ -50,18 +50,24 @@ SURVEY_EVENT_PROMPT = """
 整体亮度闪动、悬浮颗粒、压缩噪声以及同一目标的普通位移。只有明确出现新要素、数量/状态显著变化，
 或底质、微地形发生重大可见变化时，才将 survey_value 设为 true。
 
+description 是给值班调查人员阅读的当前场景描述，不是变化说明。使用“该场景包含……”或“场景显示……”
+这样的自然科学调查句式，尽可能列出当前候选图中可辨认的生物类群、附生群落、底质和微地貌。
+不要出现“与参考图相比”“上一次”“前后”“变化”“新出现”“候选图”“图像 1/2”等比较或处理过程措辞。
+
 只输出一个 JSON 对象，不要 Markdown、代码块或任何额外文字，且所有 name 与 description 必须使用简体中文：
 {
   "survey_value": true,
   "event_type": "new_element",
   "scene_changed": true,
   "new_elements": [{"category": "organism", "name": "名称", "is_new": true}],
-  "description": "一至两句简体中文画面讲解，只描述当前候选图中可见的变化。",
+  "description": "一至两句简体中文的当前场景生态描述。",
   "confidence": 0.0
 }
 
 event_type 只能是 new_element、major_scene_change、none。
-new_elements 的 category 只能是 organism、seabed_substrate、micro_topography、other。
+new_elements 最多列出 5 项当前候选图中可辨认的代表性调查要素，同一种要素只能列一次；
+category 只能是 organism、seabed_substrate、micro_topography、other。它们用于样本归档与统计，
+除确有把握外不要臆测未清晰可见的要素。
 如果没有调查价值，必须返回 survey_value=false、event_type="none"、new_elements=[]，并简要说明未确认变化。
 """.strip()
 
@@ -113,8 +119,9 @@ class LocalAdapter:
 
 
 class QwenAdapter(LocalAdapter):
-    def __init__(self, model_path: str) -> None:
+    def __init__(self, model_path: str, adapter_path: str = "") -> None:
         super().__init__("qwen", model_path)
+        self.adapter_path = Path(adapter_path) if adapter_path else None
 
     def _load_resource(self) -> tuple[Any, Any, Any]:
         import torch  # type: ignore[import-not-found]
@@ -122,9 +129,22 @@ class QwenAdapter(LocalAdapter):
 
         model = Qwen3VLForConditionalGeneration.from_pretrained(
             str(self.model_path), dtype=torch.bfloat16, local_files_only=True
-        ).to("cuda")
+        )
+        processor_path = self.model_path
+        if self.adapter_path is not None:
+            if not self.adapter_path.is_dir():
+                raise ModelNotConfigured("qwen adapter path is not configured")
+            try:
+                from peft import PeftModel  # type: ignore[import-not-found]
+            except ImportError as error:
+                raise ModelNotConfigured("qwen adapter requires the peft package") from error
+            model = PeftModel.from_pretrained(
+                model, str(self.adapter_path), is_trainable=False, local_files_only=True
+            )
+            processor_path = self.adapter_path
+        model = model.to("cuda")
         model.eval()
-        processor = AutoProcessor.from_pretrained(str(self.model_path), local_files_only=True)
+        processor = AutoProcessor.from_pretrained(str(processor_path), local_files_only=True)
         return torch, model, processor
 
     def describe_video(self, video_path: Path) -> str:
@@ -255,7 +275,7 @@ class QwenAdapter(LocalAdapter):
                 + json.dumps(metadata, ensure_ascii=False, separators=(",", ":")),
             }
         )
-        raw = self._generate(content)
+        raw = self._generate(content, max_new_tokens=256)
         return _survey_event_evaluation(raw)
 
     def _generate(
@@ -413,29 +433,25 @@ def _survey_event_evaluation(raw: str) -> SurveyEventEvaluation:
         if not isinstance(value, dict):
             raise ValueError("survey event must be an object")
         survey_value = _boolean(value["survey_value"], "survey_value")
-        scene_changed = _boolean(value["scene_changed"], "scene_changed")
+        # The second-round LoRA was trained without this redundant field. A
+        # valuable event necessarily represents a confirmed visible change.
+        scene_changed = _boolean(value.get("scene_changed", survey_value), "scene_changed")
         event_type = str(value["event_type"])
         if event_type not in {"new_element", "major_scene_change", "none"}:
             raise ValueError("survey event type is invalid")
-        elements = value.get("new_elements", [])
-        if not isinstance(elements, list):
-            raise ValueError("new elements must be a list")
-        normalized: list[dict[str, object]] = []
-        for element in elements:
-            if not isinstance(element, dict):
-                raise ValueError("new element must be an object")
-            category, name = element.get("category"), element.get("name")
-            if category not in {"organism", "seabed_substrate", "micro_topography", "other"}:
-                raise ValueError("new element category is invalid")
-            if not isinstance(name, str) or not name.strip():
-                raise ValueError("new element name is invalid")
-            normalized.append(
-                {
-                    "category": category,
-                    "name": name.strip(),
-                    "is_new": _boolean(element.get("is_new", True), "is_new"),
-                }
-            )
+        normalized = _survey_elements(
+            value.get("new_elements", []), "new element", include_new_flag=True, strict=True
+        )
+        # The selected LoRA can emit `none` alongside verified new elements.
+        # The structured evidence is sufficient to resolve only this contradiction.
+        if survey_value and event_type == "none" and normalized:
+            event_type = "new_element"
+        observed = _survey_elements(
+            value.get("observed_elements", normalized),
+            "observed element",
+            include_new_flag=False,
+            strict=False,
+        )
         description = value.get("description")
         confidence = value.get("confidence")
         if not isinstance(description, str) or not description.strip():
@@ -455,9 +471,73 @@ def _survey_event_evaluation(raw: str) -> SurveyEventEvaluation:
             tuple(normalized),
             description.strip(),
             float(confidence),
+            tuple(observed),
         )
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
-        raise ModelOutputInvalid("survey event response is invalid") from error
+        raise ModelOutputInvalid(f"survey event response is invalid: {error}") from error
+
+
+def _survey_elements(
+    values: object,
+    label: str,
+    *,
+    include_new_flag: bool,
+    strict: bool,
+) -> list[dict[str, object]]:
+    if not isinstance(values, list):
+        raise ValueError(f"{label}s must be a list")
+    normalized: list[dict[str, object]] = []
+    seen: set[tuple[str, str]] = set()
+    for element in values:
+        if not isinstance(element, dict):
+            if strict:
+                raise ValueError(f"{label} must be an object")
+            continue
+        category, name = element.get("category"), element.get("name")
+        normalized_category = _survey_category(category)
+        if normalized_category is None:
+            if strict:
+                raise ValueError(f"{label} category is invalid")
+            normalized_category = "other"
+        if not isinstance(name, str) or not name.strip():
+            if strict:
+                raise ValueError(f"{label} name is invalid")
+            continue
+        key = (normalized_category, name.strip())
+        if key in seen:
+            continue
+        seen.add(key)
+        item: dict[str, object] = {"category": normalized_category, "name": key[1]}
+        if include_new_flag:
+            item["is_new"] = _boolean(element.get("is_new", True), "is_new")
+        normalized.append(item)
+    return normalized
+
+
+def _survey_category(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
+    mapping = {
+        "organism": "organism",
+        "bio": "organism",
+        "biological": "organism",
+        "生物": "organism",
+        "seabed_substrate": "seabed_substrate",
+        "substrate": "seabed_substrate",
+        "seabed": "seabed_substrate",
+        "底质": "seabed_substrate",
+        "沉积物": "seabed_substrate",
+        "micro_topography": "micro_topography",
+        "topography": "micro_topography",
+        "地形": "micro_topography",
+        "微地貌": "micro_topography",
+        "other": "other",
+        "environment": "other",
+        "环境": "other",
+        "其他": "other",
+    }
+    return mapping.get(normalized)
 
 
 def _count_items(values: object) -> tuple[CountItem, ...]:

@@ -8,13 +8,15 @@ from collections.abc import Callable
 from dataclasses import asdict
 from typing import TypeVar
 
-from deep_sea_explorer.domain.models import Capture, Memo, SessionState
+from deep_sea_explorer.domain.enums import CaptureType
+from deep_sea_explorer.domain.models import Capture, CountItem, Memo, SessionState
 from deep_sea_explorer.infrastructure.storage.event_store import EventStore
 from deep_sea_explorer.services.candidate_queue import PerSessionEventQueue
 from deep_sea_explorer.services.key_frame_detection import (
     ByteTrackState,
     NullObjectDetector,
     SceneChangeDetector,
+    SurveyEventEvaluation,
     make_candidate,
 )
 
@@ -71,7 +73,15 @@ class MonitoringService:
             confirmed = self._confirmed_tracks.setdefault(session_id, set())
             new_tracks = [track for track in tracks if track.continuous_frames >= tracker.confirm_frames and track.track_id not in confirmed]
             confirmed.update(track.track_id for track in new_tracks)
-            scene_detector = self._scene_detectors.setdefault(session_id, SceneChangeDetector(self.scene_detector.threshold, self.scene_detector.confirm_frames))
+            scene_detector = self._scene_detectors.setdefault(
+                session_id,
+                SceneChangeDetector(
+                    self.scene_detector.threshold,
+                    self.scene_detector.confirm_frames,
+                    analysis_size=self.scene_detector.analysis_size,
+                    gpu_enabled=self.scene_detector.gpu_enabled,
+                ),
+            )
             reference = Path(state.last_scene_reference) if state.last_scene_reference else scene_detector.reference
             had_reference = reference is not None and reference.is_file()
             metrics = scene_detector.compare(frame_path, reference)
@@ -113,7 +123,45 @@ class MonitoringService:
         state.last_accepted_frame = str(image_path)
         state.last_scene_reference = str(candidate.current_image_path)
         self._scene_detectors.setdefault(candidate.session_id, self.scene_detector).accept(candidate.current_image_path)
-        self.broker.publish(Memo(datetime.now().strftime("%H:%M:%S"), evaluation.description, candidate.session_id))
+        captures = self._event_captures(state, evaluation, image_path)
+        self.broker.publish(
+            Memo(
+                datetime.now().strftime("%H:%M:%S"),
+                evaluation.description,
+                candidate.session_id,
+                captures[0] if captures else None,
+                tuple(captures),
+            )
+        )
+
+    def _event_captures(
+        self,
+        state: SessionState,
+        evaluation: SurveyEventEvaluation,
+        image_path: Path,
+    ) -> list[Capture]:
+        elements = getattr(evaluation, "observed_elements", ()) or evaluation.new_elements
+        organisms = tuple(
+            CountItem(str(item["name"]), 1)
+            for item in elements
+            if item.get("category") == "organism"
+        )
+        env_features = tuple(
+            CountItem(str(item["name"]), 1)
+            for item in elements
+            if item.get("category") in {"seabed_substrate", "micro_topography", "other"}
+        )
+        image = self._data_uri(image_path)
+        captures: list[Capture] = []
+        if organisms:
+            self.stats.update(state, CaptureType.BIO, organisms)
+            captures.append(Capture(CaptureType.BIO, image, evaluation.description, organisms=organisms))
+        if env_features:
+            self.stats.update(state, CaptureType.ENV, env_features)
+            captures.append(
+                Capture(CaptureType.ENV, image, evaluation.description, env_features=env_features)
+            )
+        return captures
 
     def process_session(self, session_id: str) -> Memo | None:
         state = self.sessions.get(session_id)

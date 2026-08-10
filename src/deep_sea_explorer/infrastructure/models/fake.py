@@ -34,6 +34,10 @@ class FakeVisionGateway:
             new_elements=tuple({"category": item.get("category", "other"), "name": item.get("category", "element"), "is_new": True} for item in changes),
             description="检测到关键画面变化。",
             confidence=0.9,
+            observed_elements=tuple(
+                {"category": item.get("category", "other"), "name": item.get("category", "element")}
+                for item in changes
+            ),
         )
 
 

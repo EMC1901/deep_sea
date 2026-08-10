@@ -8,20 +8,23 @@ bp = Blueprint("memos", __name__)
 
 
 def serialize(memo):
-    capture = None
-    if memo.capture:
-        capture = {
-            "type": memo.capture.type.value,
-            "image": memo.capture.image_data_uri,
-            "description": memo.capture.description,
-            "organisms": [asdict(item) for item in memo.capture.organisms],
-            "env_features": [asdict(item) for item in memo.capture.env_features],
+    def serialize_capture(capture):
+        return {
+            "type": capture.type.value,
+            "image": capture.image_data_uri,
+            "description": capture.description,
+            "organisms": [asdict(item) for item in capture.organisms],
+            "env_features": [asdict(item) for item in capture.env_features],
         }
+
+    captures = memo.captures or ((memo.capture,) if memo.capture else ())
     return {
         "timestamp": memo.timestamp,
         "content": memo.content,
         "session_id": memo.session_id,
-        "capture": capture,
+        # Retain the original field for clients that only understand one capture.
+        "capture": serialize_capture(memo.capture) if memo.capture else None,
+        "captures": [serialize_capture(capture) for capture in captures],
     }
 
 

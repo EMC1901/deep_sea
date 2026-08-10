@@ -47,6 +47,7 @@ class Settings:
     model_service_read_timeout_seconds: int = 120
     model_service_verify_tls: bool = True
     qwen_model_path: str = ""
+    qwen_adapter_path: str = ""
     image_generation_enabled: bool = True
     image_model_path: str = ""
     yolo_model_path: str = ""
@@ -111,6 +112,7 @@ class Settings:
             ),
             model_service_verify_tls=_as_bool(env.get("MODEL_SERVICE_VERIFY_TLS"), True),
             qwen_model_path=env.get("QWEN_MODEL_PATH", ""),
+            qwen_adapter_path=env.get("QWEN_ADAPTER_PATH", ""),
             image_generation_enabled=_as_bool(env.get("IMAGE_GENERATION_ENABLED"), True),
             image_model_path=env.get("IMAGE_MODEL_PATH", ""),
             yolo_model_path=env.get("YOLO_MODEL_PATH", ""),

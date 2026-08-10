@@ -49,5 +49,8 @@ Desktop.ini
 /assets/demo/*.mp4
 /assets/demo/*.y4m
 /artifacts/deployment-archives/
+/artifacts/smoke/
+/artifacts/s9-api/
+/docs/工作流.md
 /*.tar.gz
 /*.mp4

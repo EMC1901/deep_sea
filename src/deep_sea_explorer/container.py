@@ -134,7 +134,10 @@ def build_local_container(settings: Settings) -> ApplicationContainer:
     )
     return _build(
         settings,
-        LocalVisionGateway(runtime, QwenAdapter(settings.qwen_model_path)),
+        LocalVisionGateway(
+            runtime,
+            QwenAdapter(settings.qwen_model_path, settings.qwen_adapter_path),
+        ),
         image,
         LocalEmbeddingGateway(
             runtime,

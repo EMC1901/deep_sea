@@ -46,7 +46,12 @@ class PerSessionEventQueue:
             evaluation = future.result()
             self.on_result(candidate, evaluation)
         except Exception as error:
-            LOGGER.warning("survey event evaluation failed session_id=%s error_type=%s", candidate.session_id, type(error).__name__)
+            LOGGER.warning(
+                "survey event evaluation failed session_id=%s error_type=%s detail=%s",
+                candidate.session_id,
+                type(error).__name__,
+                str(error),
+            )
         finally:
             with self._lock:
                 queue = self._queues.get(candidate.session_id)

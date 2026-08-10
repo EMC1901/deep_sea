@@ -16,6 +16,10 @@ from deep_sea_explorer.infrastructure.storage.memory_session import MemorySessio
 from deep_sea_explorer.infrastructure.storage.temp_file_store import TempFileStore
 from deep_sea_explorer.services.capture_stats import CaptureStatsService
 from deep_sea_explorer.services.monitoring import MonitoringService
+from deep_sea_explorer.services.key_frame_detection import (
+    CandidateEvent,
+    SurveyEventEvaluation,
+)
 
 
 @pytest.fixture
@@ -122,3 +126,46 @@ def test_monitoring_keeps_capture_and_statistics_when_classification_succeeds(
     assert memo.capture.image_data_uri.startswith("data:image/jpeg;base64,")
     assert sessions.get("session").cumulative_stats["env"] == {"rock": 1}
     assert broker.drain("session") == [memo]
+
+
+def test_accepted_event_publishes_bio_and_environment_captures(
+    monitoring_temp: Path,
+) -> None:
+    service, sessions, broker, _ = monitoring_service(monitoring_temp, object())
+    image = monitoring_temp / "candidate.jpg"
+    image.write_bytes(b"\xff\xd8frame")
+    candidate = CandidateEvent(
+        "candidate",
+        "session",
+        1.0,
+        image,
+        None,
+        (),
+        {},
+        "scene",
+        "signature",
+    )
+    evaluation = SurveyEventEvaluation(
+        True,
+        "major_scene_change",
+        True,
+        (),
+        "该场景包含鱼类、海绵和沙泥底质。",
+        0.9,
+        (
+            {"category": "organism", "name": "鱼类"},
+            {"category": "organism", "name": "海绵"},
+            {"category": "seabed_substrate", "name": "沙泥底质"},
+        ),
+    )
+
+    service._complete_candidate(candidate, evaluation)
+
+    memo = broker.drain("session")[0]
+    assert [capture.type for capture in memo.captures] == [CaptureType.BIO, CaptureType.ENV]
+    assert memo.captures[0].organisms == (CountItem("鱼类", 1), CountItem("海绵", 1))
+    assert memo.captures[1].env_features == (CountItem("沙泥底质", 1),)
+    assert sessions.get("session").cumulative_stats == {
+        "bio": {"鱼类": 1, "海绵": 1},
+        "env": {"沙泥底质": 1},
+    }
