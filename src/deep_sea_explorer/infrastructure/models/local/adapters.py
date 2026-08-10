@@ -42,6 +42,29 @@ VIDEO_DESCRIPTION_PROMPT = """
 但其余叙述必须使用简体中文。
 """.strip()
 
+SURVEY_EVENT_PROMPT = """
+你是一名深海调查事件审核员。输入图像按顺序给出：第一张是上一次已确认的场景参考图，
+第二张是当前候选图。只比较两张图中可见且具有调查价值的变化；不要把它们当作视频帧序列。
+
+已知目标检测和场景变化指标只是候选信号，不能据此臆测不可见的物种或地貌。忽略轻微镜头抖动、
+整体亮度闪动、悬浮颗粒、压缩噪声以及同一目标的普通位移。只有明确出现新要素、数量/状态显著变化，
+或底质、微地形发生重大可见变化时，才将 survey_value 设为 true。
+
+只输出一个 JSON 对象，不要 Markdown、代码块或任何额外文字，且所有 name 与 description 必须使用简体中文：
+{
+  "survey_value": true,
+  "event_type": "new_element",
+  "scene_changed": true,
+  "new_elements": [{"category": "organism", "name": "名称", "is_new": true}],
+  "description": "一至两句简体中文画面讲解，只描述当前候选图中可见的变化。",
+  "confidence": 0.0
+}
+
+event_type 只能是 new_element、major_scene_change、none。
+new_elements 的 category 只能是 organism、seabed_substrate、micro_topography、other。
+如果没有调查价值，必须返回 survey_value=false、event_type="none"、new_elements=[]，并简要说明未确认变化。
+""".strip()
+
 
 class LocalAdapter:
     def __init__(self, name: str, model_path: str) -> None:
@@ -210,20 +233,30 @@ class QwenAdapter(LocalAdapter):
         if reference_image is not None and reference_image.is_file():
             from PIL import Image  # type: ignore[import-not-found]
             with Image.open(reference_image) as source:
-                content.append({"type": "image", "image": source.convert("RGB")})
+                content.extend(
+                    [
+                        {"type": "text", "text": "图像 1：上一次已确认的场景参考图。"},
+                        {"type": "image", "image": source.convert("RGB")},
+                    ]
+                )
         from PIL import Image  # type: ignore[import-not-found]
         with Image.open(current_image) as source:
-            content.append({"type": "image", "image": source.convert("RGB")})
-        content.append({"type": "text", "text": "请根据两张海底图像和检测元数据判断是否存在具有调查价值的新要素或重大场景变化。只输出JSON，字段survey_value、event_type(new_element/major_scene_change/none)、scene_changed、new_elements(含category/name/is_new)、description、confidence。元数据：" + json.dumps(metadata, ensure_ascii=False)})
+            content.extend(
+                [
+                    {"type": "text", "text": "图像 2：当前候选图。"},
+                    {"type": "image", "image": source.convert("RGB")},
+                ]
+            )
+        content.append(
+            {
+                "type": "text",
+                "text": SURVEY_EVENT_PROMPT
+                + "\n候选检测元数据（仅用于辅助比对）："
+                + json.dumps(metadata, ensure_ascii=False, separators=(",", ":")),
+            }
+        )
         raw = self._generate(content)
-        start, end = raw.find("{"), raw.rfind("}")
-        if start < 0 or end <= start:
-            raise ModelOutputInvalid("survey event response is not JSON")
-        try:
-            value = json.loads(raw[start : end + 1])
-            return SurveyEventEvaluation(bool(value.get("survey_value")), str(value.get("event_type", "none")), bool(value.get("scene_changed")), tuple(value.get("new_elements") or ()), str(value.get("description", "")), float(value.get("confidence", 0.0)))
-        except (TypeError, ValueError, json.JSONDecodeError) as error:
-            raise ModelOutputInvalid("survey event response is invalid") from error
+        return _survey_event_evaluation(raw)
 
     def _generate(
         self,
@@ -369,6 +402,62 @@ def _capture_decision(raw: str) -> CaptureDecision:
         )
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
         raise ModelOutputInvalid("local qwen frame decision is invalid") from error
+
+
+def _survey_event_evaluation(raw: str) -> SurveyEventEvaluation:
+    start, end = raw.find("{"), raw.rfind("}")
+    if start < 0 or end <= start:
+        raise ModelOutputInvalid("survey event response is not JSON")
+    try:
+        value = json.loads(raw[start : end + 1])
+        if not isinstance(value, dict):
+            raise ValueError("survey event must be an object")
+        survey_value = _boolean(value["survey_value"], "survey_value")
+        scene_changed = _boolean(value["scene_changed"], "scene_changed")
+        event_type = str(value["event_type"])
+        if event_type not in {"new_element", "major_scene_change", "none"}:
+            raise ValueError("survey event type is invalid")
+        elements = value.get("new_elements", [])
+        if not isinstance(elements, list):
+            raise ValueError("new elements must be a list")
+        normalized: list[dict[str, object]] = []
+        for element in elements:
+            if not isinstance(element, dict):
+                raise ValueError("new element must be an object")
+            category, name = element.get("category"), element.get("name")
+            if category not in {"organism", "seabed_substrate", "micro_topography", "other"}:
+                raise ValueError("new element category is invalid")
+            if not isinstance(name, str) or not name.strip():
+                raise ValueError("new element name is invalid")
+            normalized.append(
+                {
+                    "category": category,
+                    "name": name.strip(),
+                    "is_new": _boolean(element.get("is_new", True), "is_new"),
+                }
+            )
+        description = value.get("description")
+        confidence = value.get("confidence")
+        if not isinstance(description, str) or not description.strip():
+            raise ValueError("survey event description is invalid")
+        if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
+            raise ValueError("survey event confidence is invalid")
+        if not math.isfinite(float(confidence)) or not 0.0 <= float(confidence) <= 1.0:
+            raise ValueError("survey event confidence is outside range")
+        if survey_value and (event_type == "none" or not (normalized or scene_changed)):
+            raise ValueError("accepted survey event has no visible change")
+        if not survey_value and event_type != "none":
+            raise ValueError("rejected survey event must have type none")
+        return SurveyEventEvaluation(
+            survey_value,
+            event_type,
+            scene_changed,
+            tuple(normalized),
+            description.strip(),
+            float(confidence),
+        )
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        raise ModelOutputInvalid("survey event response is invalid") from error
 
 
 def _count_items(values: object) -> tuple[CountItem, ...]:
