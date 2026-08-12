@@ -36,6 +36,7 @@ class Memo:
     content: str
     session_id: str
     capture: Capture | None = None
+    captures: tuple[Capture, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

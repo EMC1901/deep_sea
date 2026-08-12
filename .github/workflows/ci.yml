@@ -14,5 +14,6 @@ jobs:
           python-version: "3.11"
       - run: python -m pip install -e ".[remote,dev]"
       - run: python -m ruff check .
+      - run: python -m mypy
       - run: python -m pytest tests/unit tests/contract tests/integration -q
       - run: python -m pytest tests/unit tests/contract tests/integration --cov=deep_sea_explorer --cov-report=term-missing

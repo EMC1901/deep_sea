@@ -7,6 +7,7 @@ import json
 import math
 import re
 import threading
+from dataclasses import dataclass
 from pathlib import Path
 from collections.abc import Iterator
 from typing import Any
@@ -44,11 +45,17 @@ VIDEO_DESCRIPTION_PROMPT = """
 
 SURVEY_EVENT_PROMPT = """
 你是一名深海调查事件审核员。输入图像按顺序给出：第一张是上一次已确认的场景参考图，
-第二张是当前候选图。只比较两张图中可见且具有调查价值的变化；不要把它们当作视频帧序列。
+第二张是当前候选图。后续图像（如有）是带有真实标签的检索范例，只能辅助识别候选图中的
+可见要素，绝不能直接复制其标签、物种名称、数量或调查结论。只比较前两张图中可见且具有
+调查价值的变化；不要把它们当作视频帧序列。
 
 已知目标检测和场景变化指标只是候选信号，不能据此臆测不可见的物种或地貌。忽略轻微镜头抖动、
 整体亮度闪动、悬浮颗粒、压缩噪声以及同一目标的普通位移。只有明确出现新要素、数量/状态显著变化，
 或底质、微地形发生重大可见变化时，才将 survey_value 设为 true。
+
+description 是给值班调查人员阅读的当前场景描述，不是变化说明。使用“该场景包含……”或“场景显示……”
+这样的自然科学调查句式，尽可能列出当前候选图中可辨认的生物类群、附生群落、底质和微地貌。
+不要出现“与参考图相比”“上一次”“前后”“变化”“新出现”“候选图”“图像 1/2”等比较或处理过程措辞。
 
 只输出一个 JSON 对象，不要 Markdown、代码块或任何额外文字，且所有 name 与 description 必须使用简体中文：
 {
@@ -56,14 +63,56 @@ SURVEY_EVENT_PROMPT = """
   "event_type": "new_element",
   "scene_changed": true,
   "new_elements": [{"category": "organism", "name": "名称", "is_new": true}],
-  "description": "一至两句简体中文画面讲解，只描述当前候选图中可见的变化。",
+  "description": "一至两句简体中文的当前场景生态描述。",
   "confidence": 0.0
 }
 
 event_type 只能是 new_element、major_scene_change、none。
-new_elements 的 category 只能是 organism、seabed_substrate、micro_topography、other。
+new_elements 最多列出 5 项当前候选图中可辨认的代表性调查要素，同一种要素只能列一次；
+category 只能是 organism、seabed_substrate、micro_topography、other。它们用于样本归档与统计，
+除确有把握外不要臆测未清晰可见的要素。CATAMI 标签中的 Biota 必须输出为 organism，
+Substrate 必须输出为 seabed_substrate，Bedforms、Relief、No bedforms、Flat、High 和
+Low / moderate 必须输出为 micro_topography；绝不能在 JSON 中输出 biota、substrate、
+bedforms、relief 或任何未列出的类别名称。
+
+输出前必须逐项检查 new_elements：每一个 category 必须精确等于 organism、
+seabed_substrate、micro_topography 或 other 之一。禁止输出 CATAMI 原始根类、中文类别名
+（例如“生物”“底质”“微地貌”）或任何近义词；若不能映射到这四个精确值，则不要输出该要素。
 如果没有调查价值，必须返回 survey_value=false、event_type="none"、new_elements=[]，并简要说明未确认变化。
 """.strip()
+
+SURVEY_EVENT_REPAIR_PROMPT = """
+Re-emit the following survey-event model response as exactly one valid JSON object.
+Do not add any observation, element, quantity, or conclusion that is not already present.
+This is a syntax and schema repair only: preserve supported values where possible and remove
+unsupported elements. Output no Markdown or explanation.
+
+Use exactly this schema:
+{
+  "survey_value": false,
+  "event_type": "none",
+  "scene_changed": false,
+  "new_elements": [],
+  "description": "",
+  "confidence": 0.0
+}
+
+event_type must be one of new_element, major_scene_change, none. Every new_elements item must
+have category exactly organism, seabed_substrate, micro_topography, or other; name must be a
+non-empty string; is_new must be true or false. If the supplied response cannot support an
+accepted event, return survey_value=false, event_type="none", scene_changed=false, and an empty
+new_elements array. Keep description concise and use a confidence from 0.0 to 1.0.
+
+Response to repair:
+""".strip()
+
+
+@dataclass(frozen=True, slots=True)
+class RetrievalExample:
+    image_path: Path
+    similarity: float
+    labels: dict[str, list[str]]
+    survey_labels: dict[str, list[str]]
 
 
 class LocalAdapter:
@@ -113,8 +162,9 @@ class LocalAdapter:
 
 
 class QwenAdapter(LocalAdapter):
-    def __init__(self, model_path: str) -> None:
+    def __init__(self, model_path: str, adapter_path: str = "") -> None:
         super().__init__("qwen", model_path)
+        self.adapter_path = Path(adapter_path) if adapter_path else None
 
     def _load_resource(self) -> tuple[Any, Any, Any]:
         import torch  # type: ignore[import-not-found]
@@ -122,9 +172,22 @@ class QwenAdapter(LocalAdapter):
 
         model = Qwen3VLForConditionalGeneration.from_pretrained(
             str(self.model_path), dtype=torch.bfloat16, local_files_only=True
-        ).to("cuda")
+        )
+        processor_path = self.model_path
+        if self.adapter_path is not None:
+            if not self.adapter_path.is_dir():
+                raise ModelNotConfigured("qwen adapter path is not configured")
+            try:
+                from peft import PeftModel  # type: ignore[import-not-found]
+            except ImportError as error:
+                raise ModelNotConfigured("qwen adapter requires the peft package") from error
+            model = PeftModel.from_pretrained(
+                model, str(self.adapter_path), is_trainable=False, local_files_only=True
+            )
+            processor_path = self.adapter_path
+        model = model.to("cuda")
         model.eval()
-        processor = AutoProcessor.from_pretrained(str(self.model_path), local_files_only=True)
+        processor = AutoProcessor.from_pretrained(str(processor_path), local_files_only=True)
         return torch, model, processor
 
     def describe_video(self, video_path: Path) -> str:
@@ -231,41 +294,87 @@ class QwenAdapter(LocalAdapter):
             raise InvalidModelInput("candidate image does not exist")
         content: list[dict[str, object]] = []
         if reference_image is not None and reference_image.is_file():
-            from PIL import Image  # type: ignore[import-not-found]
-            with Image.open(reference_image) as source:
-                content.extend(
-                    [
-                        {"type": "text", "text": "图像 1：上一次已确认的场景参考图。"},
-                        {"type": "image", "image": source.convert("RGB")},
-                    ]
-                )
-        from PIL import Image  # type: ignore[import-not-found]
-        with Image.open(current_image) as source:
             content.extend(
                 [
-                    {"type": "text", "text": "图像 2：当前候选图。"},
-                    {"type": "image", "image": source.convert("RGB")},
+                    {"type": "text", "text": "图像 1：上一次已确认的场景参考图。"},
+                    {"type": "image", "image": self._load_rgb_image(reference_image)},
                 ]
             )
+        content.extend(
+            [
+                {"type": "text", "text": "图像 2：当前候选图。"},
+                {"type": "image", "image": self._load_rgb_image(current_image)},
+            ]
+        )
+        for position, example in enumerate(_retrieval_examples(metadata), start=3):
+            try:
+                image = self._load_rgb_image(example.image_path, max_size=512)
+            except (OSError, ValueError):
+                continue
+            content.extend(
+                [
+                    {
+                        "type": "text",
+                        "text": (
+                            f"图像 {position}：检索到的相似标注范例，仅作辅助识别。"
+                            "必须独立观察当前候选图，不能直接复制范例标签或推断结论。"
+                            f"相似度：{example.similarity:.3f}。"
+                            f"已核验的真实标签提示：{_retrieval_hint_text(example.survey_labels)}。"
+                        ),
+                    },
+                    {"type": "image", "image": image},
+                ]
+            )
+        prompt_metadata = {
+            key: value for key, value in metadata.items() if key != "retrieval_context"
+        }
         content.append(
             {
                 "type": "text",
                 "text": SURVEY_EVENT_PROMPT
                 + "\n候选检测元数据（仅用于辅助比对）："
-                + json.dumps(metadata, ensure_ascii=False, separators=(",", ":")),
+                + json.dumps(prompt_metadata, ensure_ascii=False, separators=(",", ":")),
             }
         )
-        raw = self._generate(content)
-        return _survey_event_evaluation(raw)
+        # Qwen3-VL otherwise spends the response budget on a hidden reasoning
+        # trace. Survey decisions need a compact machine-readable response.
+        raw = self._generate(content, max_new_tokens=384, direct_response=True)
+        try:
+            return _survey_event_evaluation(raw)
+        except ModelOutputInvalid:
+            # Reformat only failed structured output; normal event semantics still use the parser below.
+            repaired = self._generate(
+                [{"type": "text", "text": f"{SURVEY_EVENT_REPAIR_PROMPT}\n{raw}"}],
+                max_new_tokens=384,
+                direct_response=True,
+            )
+            try:
+                return _survey_event_evaluation(repaired)
+            except ModelOutputInvalid:
+                # A malformed answer cannot establish a survey event. Returning
+                # the existing conservative no-event result keeps the session
+                # queue healthy without weakening the acceptance criteria.
+                return SurveyEventEvaluation(False, "none", False, (), "未确认有效变化。", 0.0, ())
+
+    @staticmethod
+    def _load_rgb_image(image_path: Path, *, max_size: int | None = None) -> Any:
+        from PIL import Image  # type: ignore[import-not-found]
+
+        with Image.open(image_path) as source:
+            image = source.convert("RGB")
+            if max_size is not None:
+                image.thumbnail((max_size, max_size))
+            return image.copy()
 
     def _generate(
         self,
         content: list[dict[str, object]],
         *,
         max_new_tokens: int = 256,
+        direct_response: bool = False,
     ) -> str:
         _, model, processor = self.resource
-        inputs = self._inputs(content, processor)
+        inputs = self._inputs(content, processor, direct_response=direct_response)
         generated = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
         input_length = inputs["input_ids"].shape[1]
         text = processor.batch_decode(generated[:, input_length:], skip_special_tokens=True)[0].strip()
@@ -274,9 +383,23 @@ class QwenAdapter(LocalAdapter):
         return text
 
     @staticmethod
-    def _inputs(content: list[dict[str, object]], processor: Any) -> Any:
+    def _inputs(
+        content: list[dict[str, object]],
+        processor: Any,
+        *,
+        direct_response: bool = False,
+    ) -> Any:
         messages = [{"role": "user", "content": content}]
-        prompt = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        template_args: dict[str, object] = {"tokenize": False, "add_generation_prompt": True}
+        if direct_response:
+            template_args["enable_thinking"] = False
+        try:
+            prompt = processor.apply_chat_template(messages, **template_args)
+        except TypeError:
+            # Keep test doubles and older processors usable. Production Qwen3-VL
+            # supports ``enable_thinking`` and therefore uses direct JSON mode.
+            template_args.pop("enable_thinking", None)
+            prompt = processor.apply_chat_template(messages, **template_args)
         kwargs: dict[str, Any] = {"text": [prompt], "return_tensors": "pt", "padding": True}
         images = [item["image"] for item in content if item["type"] == "image"]
         videos = [item["video"] for item in content if item["type"] == "video"]
@@ -380,6 +503,62 @@ class EmbeddingAdapter(LocalAdapter):
         return [[float(value) for value in row] for row in values]
 
 
+def _retrieval_examples(metadata: dict[str, object]) -> list[RetrievalExample]:
+    """Accept only the normalized retrieval context emitted by MonitoringService."""
+
+    values = metadata.get("retrieval_context")
+    if not isinstance(values, list):
+        return []
+    examples: list[RetrievalExample] = []
+    for value in values:
+        if not isinstance(value, dict):
+            continue
+        image_path = value.get("image_path")
+        similarity = value.get("similarity")
+        if not isinstance(image_path, str) or not image_path.strip():
+            continue
+        if isinstance(similarity, bool) or not isinstance(similarity, (int, float)):
+            continue
+        labels = _retrieval_label_mapping(value.get("labels"))
+        survey_labels = _retrieval_label_mapping(value.get("survey_labels"))
+        if not labels:
+            continue
+        examples.append(
+            RetrievalExample(Path(image_path), float(similarity), labels, survey_labels)
+        )
+    return examples
+
+
+def _retrieval_label_mapping(value: object) -> dict[str, list[str]]:
+    if not isinstance(value, dict):
+        return {}
+    result: dict[str, list[str]] = {}
+    for category, labels in value.items():
+        if not isinstance(category, str) or not isinstance(labels, list):
+            continue
+        normalized = [label.strip() for label in labels if isinstance(label, str) and label.strip()]
+        if normalized:
+            result[category] = normalized
+    return result
+
+
+def _retrieval_hint_text(labels: dict[str, list[str]]) -> str:
+    """Keep multi-image prompts compact and avoid CATAMI root names in JSON fields."""
+
+    values: list[str] = []
+    for category, paths in labels.items():
+        leaves: list[str] = []
+        for path in paths:
+            leaf = path.rsplit(" > ", 1)[-1]
+            if leaf not in leaves:
+                leaves.append(leaf)
+            if len(leaves) == 3:
+                break
+        if leaves:
+            values.append(f"{category}: {', '.join(leaves)}")
+    return "；".join(values) or "无"
+
+
 def _capture_decision(raw: str) -> CaptureDecision:
     start, end = raw.find("{"), raw.rfind("}")
     if start < 0 or end <= start:
@@ -413,29 +592,25 @@ def _survey_event_evaluation(raw: str) -> SurveyEventEvaluation:
         if not isinstance(value, dict):
             raise ValueError("survey event must be an object")
         survey_value = _boolean(value["survey_value"], "survey_value")
-        scene_changed = _boolean(value["scene_changed"], "scene_changed")
+        # The second-round LoRA was trained without this redundant field. A
+        # valuable event necessarily represents a confirmed visible change.
+        scene_changed = _boolean(value.get("scene_changed", survey_value), "scene_changed")
         event_type = str(value["event_type"])
         if event_type not in {"new_element", "major_scene_change", "none"}:
             raise ValueError("survey event type is invalid")
-        elements = value.get("new_elements", [])
-        if not isinstance(elements, list):
-            raise ValueError("new elements must be a list")
-        normalized: list[dict[str, object]] = []
-        for element in elements:
-            if not isinstance(element, dict):
-                raise ValueError("new element must be an object")
-            category, name = element.get("category"), element.get("name")
-            if category not in {"organism", "seabed_substrate", "micro_topography", "other"}:
-                raise ValueError("new element category is invalid")
-            if not isinstance(name, str) or not name.strip():
-                raise ValueError("new element name is invalid")
-            normalized.append(
-                {
-                    "category": category,
-                    "name": name.strip(),
-                    "is_new": _boolean(element.get("is_new", True), "is_new"),
-                }
-            )
+        normalized = _survey_elements(
+            value.get("new_elements", []), "new element", include_new_flag=True, strict=True
+        )
+        # The selected LoRA can emit `none` alongside verified new elements.
+        # The structured evidence is sufficient to resolve only this contradiction.
+        if survey_value and event_type == "none" and normalized:
+            event_type = "new_element"
+        observed = _survey_elements(
+            value.get("observed_elements", normalized),
+            "observed element",
+            include_new_flag=False,
+            strict=False,
+        )
         description = value.get("description")
         confidence = value.get("confidence")
         if not isinstance(description, str) or not description.strip():
@@ -455,9 +630,80 @@ def _survey_event_evaluation(raw: str) -> SurveyEventEvaluation:
             tuple(normalized),
             description.strip(),
             float(confidence),
+            tuple(observed),
         )
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
-        raise ModelOutputInvalid("survey event response is invalid") from error
+        raise ModelOutputInvalid(f"survey event response is invalid: {error}") from error
+
+
+def _survey_elements(
+    values: object,
+    label: str,
+    *,
+    include_new_flag: bool,
+    strict: bool,
+) -> list[dict[str, object]]:
+    if not isinstance(values, list):
+        raise ValueError(f"{label}s must be a list")
+    normalized: list[dict[str, object]] = []
+    seen: set[tuple[str, str]] = set()
+    for element in values:
+        if not isinstance(element, dict):
+            if strict:
+                raise ValueError(f"{label} must be an object")
+            continue
+        category, name = element.get("category"), element.get("name")
+        normalized_category = _survey_category(category)
+        if normalized_category is None:
+            if strict:
+                raise ValueError(f"{label} category is invalid")
+            normalized_category = "other"
+        if not isinstance(name, str) or not name.strip():
+            if strict:
+                raise ValueError(f"{label} name is invalid")
+            continue
+        key = (normalized_category, name.strip())
+        if key in seen:
+            continue
+        seen.add(key)
+        item: dict[str, object] = {"category": normalized_category, "name": key[1]}
+        if include_new_flag:
+            item["is_new"] = _boolean(element.get("is_new", True), "is_new")
+        normalized.append(item)
+    return normalized
+
+
+def _survey_category(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
+    mapping = {
+        "organism": "organism",
+        "bio": "organism",
+        "biological": "organism",
+        "biota": "organism",
+        "no_visible_biota": "organism",
+        "生物": "organism",
+        "seabed_substrate": "seabed_substrate",
+        "substrate": "seabed_substrate",
+        "seabed": "seabed_substrate",
+        "底质": "seabed_substrate",
+        "沉积物": "seabed_substrate",
+        "micro_topography": "micro_topography",
+        "topography": "micro_topography",
+        "bedforms": "micro_topography",
+        "no_bedforms": "micro_topography",
+        "relief": "micro_topography",
+        "bioturbation": "micro_topography",
+        "flat": "micro_topography",
+        "地形": "micro_topography",
+        "微地貌": "micro_topography",
+        "other": "other",
+        "environment": "other",
+        "环境": "other",
+        "其他": "other",
+    }
+    return mapping.get(normalized)
 
 
 def _count_items(values: object) -> tuple[CountItem, ...]:
@@ -467,6 +713,8 @@ def _count_items(values: object) -> tuple[CountItem, ...]:
         raise ValueError("count items must be a list")
     result: list[CountItem] = []
     for item in values:
+        name: object
+        count: object
         if isinstance(item, str):
             name, count = item.strip(), 1
         elif isinstance(item, dict):
@@ -476,11 +724,14 @@ def _count_items(values: object) -> tuple[CountItem, ...]:
                 raise ValueError("count item name must be a string")
         else:
             raise ValueError("count item must be an object")
-        if not name:
+        if not isinstance(name, str) or not name:
             continue
-        if isinstance(count, bool):
+        if isinstance(count, bool) or not isinstance(count, (int, float, str)):
             raise ValueError("count item count must be an integer")
-        result.append(CountItem(name, int(count)))
+        try:
+            result.append(CountItem(name, int(count)))
+        except (TypeError, ValueError) as error:
+            raise ValueError("count item count must be an integer") from error
     return tuple(result)
 
 

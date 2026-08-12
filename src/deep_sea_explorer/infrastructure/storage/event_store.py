@@ -52,7 +52,9 @@ class EventStore:
         target_dir.mkdir(parents=True, exist_ok=True)
         target = target_dir / f"{candidate.captured_at:.6f}_{uuid.uuid4().hex}.jpg"
         shutil.copy2(source, target)
-        elements = evaluation.new_elements or ({"category": "other", "name": "", "is_new": True},)
+        elements = evaluation.new_elements or evaluation.observed_elements or (
+            {"category": "other", "name": "", "is_new": True},
+        )
         with self._lock, sqlite3.connect(self.database) as connection:
             for element in elements:
                 connection.execute(

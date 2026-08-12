@@ -39,14 +39,23 @@ class PerSessionEventQueue:
     def _start_locked(self, queue: _SessionQueue, candidate: CandidateEvent) -> None:
         future = self._executor.submit(self.evaluator, candidate)
         queue.in_flight = future
-        future.add_done_callback(lambda completed, c=candidate: self._completed(c, completed))
+
+        def complete(completed: Future[SurveyEventEvaluation]) -> None:
+            self._completed(candidate, completed)
+
+        future.add_done_callback(complete)
 
     def _completed(self, candidate: CandidateEvent, future: Future[SurveyEventEvaluation]) -> None:
         try:
             evaluation = future.result()
             self.on_result(candidate, evaluation)
         except Exception as error:
-            LOGGER.warning("survey event evaluation failed session_id=%s error_type=%s", candidate.session_id, type(error).__name__)
+            LOGGER.warning(
+                "survey event evaluation failed session_id=%s error_type=%s detail=%s",
+                candidate.session_id,
+                type(error).__name__,
+                str(error),
+            )
         finally:
             with self._lock:
                 queue = self._queues.get(candidate.session_id)

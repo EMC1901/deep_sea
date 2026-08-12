@@ -4,7 +4,9 @@ param(
 
     [string]$Url = "http://localhost:8000",
 
-    [switch]$ValidateOnly
+    [switch]$ValidateOnly,
+
+    [switch]$PassThru
 )
 
 $ErrorActionPreference = "Stop"
@@ -77,7 +79,7 @@ $arguments = @(
 )
 
 Write-Host "Starting an isolated Chrome fake-camera session..."
-Start-Process -FilePath $chrome -ArgumentList $arguments | Out-Null
+$chromeProcess = Start-Process -FilePath $chrome -ArgumentList $arguments -PassThru
 
 $profileReady = $false
 for ($attempt = 0; $attempt -lt 10; $attempt++) {
@@ -94,4 +96,12 @@ if (-not $profileReady) {
 
 Write-Host "Fake-camera Chrome started successfully."
 Write-Host "Test profile: $profileDir"
+
+if ($PassThru) {
+    [PSCustomObject]@{
+        ProcessId = $chromeProcess.Id
+        ProfileDir = $profileDir
+        Mode = "simulated"
+    }
+}
 Write-Host "Open the page and click '开始监测'."

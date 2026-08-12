@@ -2,8 +2,8 @@
 
 ## 项目定位
 
-Deep Sea Explorer 是一个服务器辅助的深海观测系统。浏览器采集视频画面，开发机
-主 API 负责会话和业务编排，服务器模型服务负责视觉理解、向量化和图像生成。
+Deep Sea Explorer 是一个服务器辅助的深海观测系统。浏览器采集视频画面，项目 API
+负责编排关键画面检测、图像检索增强、视觉文本推理、样本统计与报告生成。
 
 ## 当前组成
 
@@ -20,8 +20,8 @@ Deep Sea Explorer 是一个服务器辅助的深海观测系统。浏览器采�
 ## 运行模式
 
 - `fake`：普通自动化测试使用，不访问网络或真实模型；
-- `remote`：开发机通过 SSH 隧道调用服务器模型服务；
-- `local`：服务器模型服务加载本地 GPU 模型。
+- `remote`：保留的兼容模式，默认关闭实际远程调用；
+- `local`：本项目服务器加载本地 GPU 模型并完成推理。
 
 运行配置来自 `.env`；该文件可能含 Token 和语音凭据，不得提交 Git。可提交的安全
 模板为 `.env.example`、`.env.development.example` 和 `.env.server.example`。
@@ -63,10 +63,7 @@ Deep Sea Explorer 是一个服务器辅助的深海观测系统。浏览器采�
 
 ## 关键文档
 
-- [架构说明](architecture.md)
-- [运行环境配置](deployment-profiles.md)
-- [服务器模型 API 契约](server-model-api-contract.md)
-- [服务器模型部署记录](server-model-deployment-record.md)
-- [服务器部署实施方案](服务器端模型部署以及与开发机端项目连接的实施方案.md)
-- [历史阶段记录](history/README.md)
-
+- [开发与服务器部署参考](开发与服务器部署参考.md)
+- [关键画面检测与 LoRA 接入参考](关键画面检测重构与LoRA模型接入开发参考.md)
+- [图像检索增强架构决策](图像检索增强架构决策.md)
+- [系统使用手册](深海海底智能探测系统的使用手册.md)

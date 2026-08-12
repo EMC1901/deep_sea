@@ -5,6 +5,7 @@ in-memory objects and cannot be shared safely between Gunicorn workers.
 """
 
 import os
+from pathlib import Path
 
 
 bind = os.getenv("DEEP_SEA_API_BIND", "127.0.0.1:9001")
@@ -18,6 +19,26 @@ accesslog = "-"
 errorlog = "-"
 capture_output = True
 preload_app = False
+
+
+def _qwen_runtime_override() -> list[str]:
+    """Read the non-secret adapter override, if an operator supplied one."""
+    runtime_env = Path(__file__).resolve().parents[1] / "runtime" / "qwen-runtime.env"
+    try:
+        lines = runtime_env.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return []
+
+    for line in lines:
+        key, separator, value = line.partition("=")
+        if separator and key.strip() == "QWEN_ADAPTER_PATH":
+            # An empty value deliberately selects the Qwen base model.
+            return [f"QWEN_ADAPTER_PATH={value.strip()}"]
+    return []
+
+
+# Gunicorn reapplies this when HUP reloads the configuration and starts workers.
+raw_env = _qwen_runtime_override()
 
 
 def post_worker_init(worker):

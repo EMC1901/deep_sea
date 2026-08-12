@@ -42,6 +42,8 @@ def test_main_api_gunicorn_configuration_uses_one_worker_and_starts_monitoring()
     assert "workers = 1" in config
     assert "start_background_services(worker.wsgi)" in config
     assert "stop_background_services(worker.wsgi)" in config
+    assert '"runtime" / "qwen-runtime.env"' in config
+    assert '"QWEN_ADAPTER_PATH"' in config
 
 
 def test_systemd_services_use_the_unprivileged_service_account_and_wrappers() -> None:

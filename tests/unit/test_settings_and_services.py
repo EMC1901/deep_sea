@@ -40,12 +40,46 @@ def test_settings_validate_modes_without_loading_models() -> None:
         "MODEL_MAX_EMBEDDING_TEXTS must be positive"
         in Settings(model_max_embedding_texts=0).validate_for_runtime()
     )
+    assert "image retrieval requires MODEL_BACKEND=local" in Settings(
+        model_backend=ModelBackend.FAKE,
+        image_retrieval_enabled=True,
+        image_retrieval_index_dir="/index",
+        image_retrieval_dino_model_path="/dinov2",
+    ).validate_for_runtime()
+    assert "enabled image retrieval requires IMAGE_RETRIEVAL_INDEX_DIR" in Settings(
+        model_backend=ModelBackend.LOCAL,
+        image_retrieval_enabled=True,
+        image_retrieval_dino_model_path="/dinov2",
+    ).validate_for_runtime()
+    assert "IMAGE_RETRIEVAL_TOP_K must be between 0 and 8" in Settings(
+        image_retrieval_top_k=9
+    ).validate_for_runtime()
 
 
 def test_settings_accepts_the_server_model_temp_directory_name() -> None:
     settings = Settings.from_env({"MODEL_TEMP_DIR": "/server/tmp"})
 
     assert settings.temp_dir.as_posix() == "/server/tmp"
+
+
+def test_settings_reads_image_retrieval_configuration() -> None:
+    settings = Settings.from_env(
+        {
+            "IMAGE_RETRIEVAL_ENABLED": "true",
+            "IMAGE_RETRIEVAL_INDEX_DIR": "/runtime/index",
+            "IMAGE_RETRIEVAL_DINO_MODEL_PATH": "/runtime/dinov2",
+            "IMAGE_RETRIEVAL_TOP_K": "4",
+            "IMAGE_RETRIEVAL_DEVICE": "cuda",
+            "IMAGE_RETRIEVAL_EXCLUDE_SAME_SITE": "true",
+        }
+    )
+
+    assert settings.image_retrieval_enabled is True
+    assert settings.image_retrieval_index_dir == "/runtime/index"
+    assert settings.image_retrieval_dino_model_path == "/runtime/dinov2"
+    assert settings.image_retrieval_top_k == 4
+    assert settings.image_retrieval_device == "cuda"
+    assert settings.image_retrieval_exclude_same_site is True
 
 
 def test_disabled_remote_client_never_attempts_network() -> None:

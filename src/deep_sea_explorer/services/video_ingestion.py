@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Protocol
 
 from deep_sea_explorer.domain.exceptions import ValidationError
+from deep_sea_explorer.ports.file_store import FileStore
+from deep_sea_explorer.ports.session_store import SessionStore
+
+
+class FrameMonitoringGateway(Protocol):
+    def process_frame(self, session_id: str, frame: bytes) -> dict[str, object]: ...
 
 
 class VideoIngestionService:
-    def __init__(self, store: object, sessions: object, max_frames: int) -> None:
+    def __init__(self, store: FileStore, sessions: SessionStore, max_frames: int) -> None:
         self.store, self.sessions, self.max_frames = store, sessions, max_frames
 
     def ingest(self, session_id: str, frames: list[bytes]) -> Path:
@@ -24,7 +31,8 @@ class VideoIngestionService:
             raise ValidationError("first frame is not a valid JPEG")
         height, width = decoded[0].shape[:2]
         target = self.store.session_video_path(session_id)
-        writer = cv2.VideoWriter(str(target), cv2.VideoWriter_fourcc(*"mp4v"), 10, (width, height))
+        fourcc = getattr(cv2, "VideoWriter_fourcc")(*"mp4v")
+        writer = cv2.VideoWriter(str(target), fourcc, 10, (width, height))
         if not writer.isOpened():
             raise ValidationError("video writer cannot be opened")
         try:
@@ -41,7 +49,12 @@ class VideoIngestionService:
         self.sessions.get(session_id).latest_video = str(target)
         return target
 
-    def ingest_frame(self, session_id: str, frame: bytes, monitoring: object) -> dict[str, object]:
+    def ingest_frame(
+        self,
+        session_id: str,
+        frame: bytes,
+        monitoring: FrameMonitoringGateway,
+    ) -> dict[str, object]:
         """Forward one browser JPEG to event-driven monitoring without creating a video."""
         if not frame or len(frame) > 10 * 1024 * 1024:
             raise ValidationError("frame is empty or too large")

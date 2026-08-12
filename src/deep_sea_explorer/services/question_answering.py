@@ -6,6 +6,9 @@ from pathlib import Path
 
 from deep_sea_explorer.domain.enums import StreamEventType
 from deep_sea_explorer.domain.models import StreamEvent
+from deep_sea_explorer.ports.model_gateway import ImageGenerationGateway, VisionModelGateway
+from deep_sea_explorer.ports.session_store import SessionStore
+from deep_sea_explorer.services.rag_service import RagService
 
 
 class QuestionAnsweringService:
@@ -24,7 +27,13 @@ class QuestionAnsweringService:
     )
     IMAGE_TRIGGERS = ("生成图片", "生成一张", "画", "create image", "generate image")
 
-    def __init__(self, vision: object, image: object, rag: object, sessions: object) -> None:
+    def __init__(
+        self,
+        vision: VisionModelGateway,
+        image: ImageGenerationGateway,
+        rag: RagService,
+        sessions: SessionStore,
+    ) -> None:
         self.vision, self.image, self.rag, self.sessions = vision, image, rag, sessions
 
     def answer(self, session_id: str, question: str, video_path: Path) -> Iterator[StreamEvent]:

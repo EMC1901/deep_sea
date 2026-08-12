@@ -119,7 +119,8 @@ class ReportLabRenderer:
         env_stats = self._records(material.get("env_stats"))
         memos = self._records(material.get("memos"))
         chats = self._records(material.get("chats"))
-        meta = material.get("meta") if isinstance(material.get("meta"), dict) else {}
+        raw_meta = material.get("meta")
+        meta: dict[str, object] = raw_meta if isinstance(raw_meta, dict) else {}
 
         story.append(Paragraph("深海探测任务综合报告", title_style))
         header_data = [
@@ -561,6 +562,9 @@ class ReportLabRenderer:
     @staticmethod
     def _count(item: dict[str, object]) -> int:
         try:
-            return max(0, int(item.get("count", 0)))
+            value = item.get("count", 0)
+            if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+                return 0
+            return max(0, int(value))
         except (TypeError, ValueError):
             return 0

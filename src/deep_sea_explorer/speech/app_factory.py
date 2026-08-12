@@ -4,7 +4,7 @@ import os
 import tempfile
 from pathlib import Path
 
-import imageio_ffmpeg
+import imageio_ffmpeg  # type: ignore[import-untyped]
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 

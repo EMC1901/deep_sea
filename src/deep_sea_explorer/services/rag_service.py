@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from deep_sea_explorer.domain.models import RagDocumentChunk
+from deep_sea_explorer.ports.embedding_gateway import EmbeddingGateway
 
 
 class TextChunker:
@@ -20,15 +21,15 @@ class TextChunker:
 class RagService:
     """当前明确采用内存索引；服务重启后文档和索引会丢失。"""
 
-    def __init__(self, embedding: object, chunker: TextChunker | None = None) -> None:
+    def __init__(self, embedding: EmbeddingGateway, chunker: TextChunker | None = None) -> None:
         self.embedding, self.chunker = embedding, chunker or TextChunker()
         self.documents: list[RagDocumentChunk] = []
         self._vectors: list[list[float]] = []
-        self.index: object | None = None
+        self.index = False
 
     def add_pdf(self, path: Path, doc_id: str) -> bool:
         try:
-            import fitz
+            import fitz  # type: ignore[import-untyped]
 
             document = fitz.open(path)
             text = "".join(page.get_text() for page in document)
@@ -45,10 +46,10 @@ class RagService:
 
     def build_index(self) -> None:
         if not self.documents:
-            self.index, self._vectors = None, []
+            self.index, self._vectors = False, []
             return
         self._vectors = self.embedding.embed([document.content for document in self.documents])
-        self.index = object()
+        self.index = True
 
     def search(self, query: str, top_k: int = 5) -> list[RagDocumentChunk]:
         if not self.index or not query:

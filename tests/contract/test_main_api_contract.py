@@ -48,6 +48,13 @@ def test_health_keeps_current_top_level_fields(client) -> None:
     assert body["model"] == "loaded"
     assert body["rag"] == "no_documents"
     assert body["documents"] == 0
+    assert body["image_retrieval"] == {
+        "enabled": False,
+        "ready": False,
+        "detail": "image retrieval is disabled",
+        "index_size": 0,
+        "embedding_dimension": 0,
+    }
 
 
 def test_video_analyze_returns_saved_status_and_ndjson(client) -> None:

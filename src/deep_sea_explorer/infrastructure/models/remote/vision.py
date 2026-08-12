@@ -113,6 +113,6 @@ class RemoteVisionGateway:
             files.update(self._file(reference_image, "reference_image", "image/jpeg"))
         body = self.client.json_body(self.client.request("POST", "/vision/evaluate-survey-event", files=files, data={"metadata": json.dumps(metadata, ensure_ascii=False)}))
         try:
-            return SurveyEventEvaluation(bool(body["survey_value"]), str(body["event_type"]), bool(body.get("scene_changed")), tuple(body.get("new_elements") or ()), str(body.get("description", "")), float(body.get("confidence", 0.0)))
+            return SurveyEventEvaluation(bool(body["survey_value"]), str(body["event_type"]), bool(body.get("scene_changed")), tuple(body.get("new_elements") or ()), str(body.get("description", "")), float(body.get("confidence", 0.0)), tuple(body.get("observed_elements") or ()))
         except (KeyError, TypeError, ValueError) as error:
             raise ModelUnavailableError("remote survey event response is invalid") from error

@@ -11,7 +11,8 @@ SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT_ROOT="$(CDPATH= cd -- "${SCRIPT_DIR}/../.." && pwd)"
 COLLECTION_DATE="$(date +%F)"
 COLLECTION_TIMESTAMP="$(date +%Y%m%dT%H%M%S%z)"
-ARTIFACT_DIR="/sevenH/deep-sea-realtime/artifacts/phase1/${COLLECTION_DATE}"
+# Keep sensitive raw evidence inside this project's ignored runtime directory.
+ARTIFACT_DIR="${PROJECT_ROOT}/runtime/environment-evidence/phase1/${COLLECTION_DATE}"
 RAW_OUTPUT="${ARTIFACT_DIR}/environment.txt"
 REPORT_DIR="${PROJECT_ROOT}/docs/acceptance"
 REPORT_OUTPUT="${REPORT_DIR}/environment-baseline.md"
@@ -249,8 +250,7 @@ fi
 - 状态：等待项目负责人完成人工确认
 - 采集日期：${COLLECTION_DATE}
 - 原始证据：\`${RAW_OUTPUT}\`（受控文件，不提交 Git）
-- 有效方案：\`new_docs/阶段一详细实施方案-轻量级.md\` V1.0
-- 历史对照：\`docs/server-model-deployment-record.md\`
+- 适用部署参考：\`docs/开发与服务器部署参考.md\`
 - 采集方式：\`scripts/server/collect_environment.sh\`
 - 安全说明：未使用 \`sudo\`，未读取密钥、\`.env\` 或模型目录；以下命令输出已自动脱敏。
 
@@ -269,7 +269,7 @@ fi
 
 ## 与历史记录的差异
 
-待项目负责人将本次结果与 \`docs/server-model-deployment-record.md\` 逐项比较后填写。
+待项目负责人结合当前部署参考与本次结果逐项填写。
 
 - GPU：
 - 显存：

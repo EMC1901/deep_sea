@@ -41,7 +41,7 @@ def test_p1_01_collector_contains_every_required_read_only_query() -> None:
 def test_p1_01_collector_enforces_safety_and_expected_outputs() -> None:
     script = SCRIPT_PATH.read_text(encoding="utf-8")
 
-    assert "/sevenH/deep-sea-realtime/artifacts/phase1/" in script
+    assert "runtime/environment-evidence/phase1/" in script
     assert "docs/acceptance" in script
     assert "environment-baseline.md" in script
     assert "umask 077" in script
@@ -52,7 +52,7 @@ def test_p1_01_collector_enforces_safety_and_expected_outputs() -> None:
     assert "<redacted-user-and-groups>" in script
     assert "<redacted-ip>" in script
     assert "environment.before-${COLLECTION_TIMESTAMP}.txt" in script
-    assert "docs/server-model-deployment-record.md" in script
+    assert "docs/开发与服务器部署参考.md" in script
     assert "gcc --version" not in script
     assert "cmake --version" not in script
     assert "str | None" not in script
@@ -65,22 +65,23 @@ def test_p1_01_collector_enforces_safety_and_expected_outputs() -> None:
     assert not re.search(r"(?m)^\s*chmod(?:\s|$)", script)
 
 
-def test_p1_01_baseline_requires_human_confirmation() -> None:
-    baseline = BASELINE_PATH.read_text(encoding="utf-8")
+def test_p1_01_baseline_template_requires_human_confirmation() -> None:
+    script = SCRIPT_PATH.read_text(encoding="utf-8")
 
     for marker in (
         "GPU 确实为 RTX 3090",
         "Ubuntu 确实为 20.04.6 LTS",
-        "`/projects`",
-        "`/sevenH`",
+        "/projects",
+        "/sevenH",
         "GPU 进程",
         "Docker data-root",
-        "`19000`",
-        "`19100`",
+        "19000",
+        "19100",
         "Ubuntu Pro/ESM",
-        "docs/server-model-deployment-record.md",
         "与历史记录的差异",
         "确认人：EMC1901",
         "是否允许进入 P1-02：否",
     ):
-        assert marker in baseline
+        assert marker in script
+
+    assert "deep-sea-realtime" not in script
