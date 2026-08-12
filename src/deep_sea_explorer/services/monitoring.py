@@ -9,16 +9,27 @@ from dataclasses import asdict
 from typing import TypeVar
 
 from deep_sea_explorer.domain.enums import CaptureType
+from deep_sea_explorer.domain.retrieval import ImageRetrievalQuery, RetrievedImage
 from deep_sea_explorer.domain.models import Capture, CountItem, Memo, SessionState
 from deep_sea_explorer.infrastructure.storage.event_store import EventStore
+from deep_sea_explorer.ports.embedding_gateway import EmbeddingGateway
+from deep_sea_explorer.ports.file_store import FileStore
+from deep_sea_explorer.ports.image_retrieval import ImageRetrievalGateway
+from deep_sea_explorer.ports.memo_broker import MemoBroker
+from deep_sea_explorer.ports.model_gateway import VisionModelGateway
+from deep_sea_explorer.ports.session_store import SessionStore
+from deep_sea_explorer.services.capture_stats import CaptureStatsService
 from deep_sea_explorer.services.candidate_queue import PerSessionEventQueue
 from deep_sea_explorer.services.key_frame_detection import (
     ByteTrackState,
+    CandidateEvent,
     NullObjectDetector,
+    ObjectDetector,
     SceneChangeDetector,
     SurveyEventEvaluation,
     make_candidate,
 )
+from deep_sea_explorer.services.image_retrieval import map_labels_to_survey_categories
 
 
 LOGGER = logging.getLogger(__name__)
@@ -28,16 +39,19 @@ T = TypeVar("T")
 class MonitoringService:
     def __init__(
         self,
-        vision: object,
-        embedding: object,
-        sessions: object,
-        broker: object,
-        files: object,
-        stats: object,
+        vision: VisionModelGateway,
+        embedding: EmbeddingGateway,
+        sessions: SessionStore,
+        broker: MemoBroker,
+        files: FileStore,
+        stats: CaptureStatsService,
         threshold: float,
-        detector: object | None = None,
+        detector: ObjectDetector | None = None,
         scene_detector: SceneChangeDetector | None = None,
         event_store: EventStore | None = None,
+        image_retrieval: ImageRetrievalGateway | None = None,
+        retrieval_top_k: int = 4,
+        retrieval_exclude_same_site: bool = False,
     ) -> None:
         (
             self.vision,
@@ -51,6 +65,9 @@ class MonitoringService:
         self.detector = detector or NullObjectDetector()
         self.scene_detector = scene_detector or SceneChangeDetector()
         self.event_store = event_store or EventStore(files.root / "data")
+        self.image_retrieval = image_retrieval
+        self.retrieval_top_k = retrieval_top_k
+        self.retrieval_exclude_same_site = retrieval_exclude_same_site
         self._trackers: dict[str, ByteTrackState] = {}
         self._confirmed_tracks: dict[str, set[int]] = {}
         self._scene_detectors: dict[str, SceneChangeDetector] = {}
@@ -106,11 +123,73 @@ class MonitoringService:
         finally:
             frame_path.unlink(missing_ok=True)
 
-    def _evaluate_candidate(self, candidate):
-        metadata = {"yolo_changes": list(candidate.yolo_changes), "scene_change_metrics": candidate.scene_change_metrics, "trigger_type": candidate.trigger_type}
+    def _evaluate_candidate(self, candidate: CandidateEvent) -> SurveyEventEvaluation:
+        metadata: dict[str, object] = {
+            "yolo_changes": list(candidate.yolo_changes),
+            "scene_change_metrics": candidate.scene_change_metrics,
+            "trigger_type": candidate.trigger_type,
+        }
+        self._add_retrieval_context(candidate, metadata)
         return self.vision.evaluate_survey_event(candidate.reference_image_path, candidate.current_image_path, metadata)
 
-    def _complete_candidate(self, candidate, evaluation) -> None:
+    def _add_retrieval_context(
+        self,
+        candidate: CandidateEvent,
+        metadata: dict[str, object],
+    ) -> None:
+        """Add optional visual examples while preserving the original VLM fallback."""
+
+        if self.image_retrieval is None or self.retrieval_top_k == 0:
+            return
+        try:
+            results = self.image_retrieval.retrieve(
+                ImageRetrievalQuery(
+                    candidate.current_image_path,
+                    k=self.retrieval_top_k,
+                    exclude_same_site=self.retrieval_exclude_same_site,
+                )
+            )
+            metadata["retrieval_context"] = self._serialize_retrieval_context(results)
+        except Exception as error:
+            # Retrieval is advisory.  The unchanged two-image evaluation must
+            # still run if its encoder, index, or source gallery is unavailable.
+            LOGGER.warning(
+                "image retrieval degraded session_id=%s candidate_id=%s error_type=%s",
+                candidate.session_id,
+                candidate.candidate_id,
+                type(error).__name__,
+            )
+            metadata["retrieval_context"] = []
+            metadata["retrieval_degraded"] = type(error).__name__
+
+    @staticmethod
+    def _serialize_retrieval_context(results: tuple[RetrievedImage, ...]) -> list[dict[str, object]]:
+        context: list[dict[str, object]] = []
+        for result in results:
+            image_path = result.image_path
+            if image_path is None or not image_path.is_file():
+                continue
+            labels = {category: list(values) for category, values in result.labels.items()}
+            context.append(
+                {
+                    "image_id": result.image_id,
+                    "image_path": str(image_path),
+                    "site": result.site,
+                    "similarity": result.similarity,
+                    "labels": labels,
+                    "survey_labels": {
+                        category: list(values)
+                        for category, values in map_labels_to_survey_categories(result.labels).items()
+                    },
+                }
+            )
+        return context
+
+    def _complete_candidate(
+        self,
+        candidate: CandidateEvent,
+        evaluation: SurveyEventEvaluation,
+    ) -> None:
         state = self.sessions.get(candidate.session_id)
         state.model_task_in_flight = False
         state.last_model_call_time = datetime.now().timestamp()

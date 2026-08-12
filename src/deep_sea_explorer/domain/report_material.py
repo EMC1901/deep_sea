@@ -54,12 +54,12 @@ def _compact(value: object, budget: _TextBudget, *, depth: int) -> object:
                 result[key] = compacted
         return result
     if isinstance(value, list):
-        result: list[object] = []
+        items: list[object] = []
         for item in value[:MAX_COLLECTION_ITEMS]:
             compacted = _compact(item, budget, depth=depth + 1)
             if compacted is not _SKIP:
-                result.append(compacted)
-        return result
+                items.append(compacted)
+        return items
     if isinstance(value, str):
         if value.lstrip().lower().startswith("data:image/"):
             return _SKIP

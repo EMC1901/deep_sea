@@ -5,8 +5,8 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-CONTRACT_FILE = PROJECT_ROOT / "docs" / "server-model-api-contract.md"
-PLACEHOLDER_ENV = PROJECT_ROOT / "docs" / "server-model-placeholder.env"
+APP_FACTORY = PROJECT_ROOT / "src" / "deep_sea_explorer" / "model_service" / "app_factory.py"
+PLACEHOLDER_ENV = PROJECT_ROOT / ".env.example"
 FIXTURE_DIR = PROJECT_ROOT / "tests" / "fixtures" / "server_model_api"
 
 
@@ -21,22 +21,21 @@ def read_env_template(path: Path) -> dict[str, str]:
     return values
 
 
-def test_server_model_contract_is_frozen_at_v1() -> None:
-    contract = CONTRACT_FILE.read_text(encoding="utf-8")
+def test_server_model_routes_remain_on_v1() -> None:
+    contract = APP_FACTORY.read_text(encoding="utf-8")
 
-    assert "API 契约 v1" in contract
-    assert "已冻结（S2）" in contract
-    assert "服务器模型服务尚未实现" in contract
+    assert 'API_PREFIX = "/v1"' in contract
+    assert '@app.get(f"{API_PREFIX}/health")' in contract
     for endpoint in (
-        "GET /v1/health",
-        "POST /v1/vision/describe-video",
-        "POST /v1/vision/evaluate-frame",
-        "POST /v1/vision/answer",
-        "POST /v1/vision/summarize-report",
-        "POST /v1/images/generate",
-        "POST /v1/embeddings",
+        "/vision/describe-video",
+        "/vision/evaluate-frame",
+        "/vision/evaluate-survey-event",
+        "/vision/answer",
+        "/vision/summarize-report",
+        "/images/generate",
+        "/embeddings",
     ):
-        assert endpoint in contract
+        assert f'@app.post(f"{{API_PREFIX}}{endpoint}")' in contract
 
 
 def test_placeholder_environment_disables_remote_connection() -> None:

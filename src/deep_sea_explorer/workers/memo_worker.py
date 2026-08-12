@@ -3,13 +3,25 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from typing import Protocol
+
+from deep_sea_explorer.ports.session_store import SessionStore
 
 
 LOGGER = logging.getLogger(__name__)
 
 
+class MonitoringGateway(Protocol):
+    def process_session(self, session_id: str) -> object: ...
+
+
 class MemoWorker:
-    def __init__(self, monitoring: object, sessions: object, interval_seconds: float = 1.0) -> None:
+    def __init__(
+        self,
+        monitoring: MonitoringGateway,
+        sessions: SessionStore,
+        interval_seconds: float = 1.0,
+    ) -> None:
         self.monitoring, self.sessions, self.interval_seconds = (
             monitoring,
             sessions,

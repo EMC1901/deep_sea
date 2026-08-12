@@ -103,7 +103,6 @@ def test_scene_detector_aligns_small_rotation_and_reports_affine_metrics(tmp_pat
 
 def test_scene_detector_uses_ssim_and_residual_flow_for_a_local_change(tmp_path: Path) -> None:
     cv2 = pytest.importorskip("cv2")
-    import numpy as np
 
     reference = _seabed_frame(tmp_path, "reference.jpg")
     changed = cv2.imread(str(reference))

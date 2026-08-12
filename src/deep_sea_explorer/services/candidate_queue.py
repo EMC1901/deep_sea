@@ -39,7 +39,11 @@ class PerSessionEventQueue:
     def _start_locked(self, queue: _SessionQueue, candidate: CandidateEvent) -> None:
         future = self._executor.submit(self.evaluator, candidate)
         queue.in_flight = future
-        future.add_done_callback(lambda completed, c=candidate: self._completed(c, completed))
+
+        def complete(completed: Future[SurveyEventEvaluation]) -> None:
+            self._completed(candidate, completed)
+
+        future.add_done_callback(complete)
 
     def _completed(self, candidate: CandidateEvent, future: Future[SurveyEventEvaluation]) -> None:
         try:

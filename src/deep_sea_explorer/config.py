@@ -48,6 +48,12 @@ class Settings:
     model_service_verify_tls: bool = True
     qwen_model_path: str = ""
     qwen_adapter_path: str = ""
+    image_retrieval_enabled: bool = False
+    image_retrieval_index_dir: str = ""
+    image_retrieval_dino_model_path: str = ""
+    image_retrieval_top_k: int = 4
+    image_retrieval_device: str = "auto"
+    image_retrieval_exclude_same_site: bool = False
     image_generation_enabled: bool = True
     image_model_path: str = ""
     yolo_model_path: str = ""
@@ -113,6 +119,14 @@ class Settings:
             model_service_verify_tls=_as_bool(env.get("MODEL_SERVICE_VERIFY_TLS"), True),
             qwen_model_path=env.get("QWEN_MODEL_PATH", ""),
             qwen_adapter_path=env.get("QWEN_ADAPTER_PATH", ""),
+            image_retrieval_enabled=_as_bool(env.get("IMAGE_RETRIEVAL_ENABLED")),
+            image_retrieval_index_dir=env.get("IMAGE_RETRIEVAL_INDEX_DIR", ""),
+            image_retrieval_dino_model_path=env.get("IMAGE_RETRIEVAL_DINO_MODEL_PATH", ""),
+            image_retrieval_top_k=_as_int(env.get("IMAGE_RETRIEVAL_TOP_K"), 4),
+            image_retrieval_device=env.get("IMAGE_RETRIEVAL_DEVICE", "auto"),
+            image_retrieval_exclude_same_site=_as_bool(
+                env.get("IMAGE_RETRIEVAL_EXCLUDE_SAME_SITE")
+            ),
             image_generation_enabled=_as_bool(env.get("IMAGE_GENERATION_ENABLED"), True),
             image_model_path=env.get("IMAGE_MODEL_PATH", ""),
             yolo_model_path=env.get("YOLO_MODEL_PATH", ""),
@@ -160,6 +174,15 @@ class Settings:
                     errors.append(f"local mode requires {name}")
             if self.image_generation_enabled and not self.image_model_path:
                 errors.append("local mode requires IMAGE_MODEL_PATH when image generation is enabled")
+        if self.image_retrieval_enabled:
+            if self.model_backend is not ModelBackend.LOCAL:
+                errors.append("image retrieval requires MODEL_BACKEND=local")
+            if not self.image_retrieval_index_dir:
+                errors.append("enabled image retrieval requires IMAGE_RETRIEVAL_INDEX_DIR")
+            if not self.image_retrieval_dino_model_path:
+                errors.append("enabled image retrieval requires IMAGE_RETRIEVAL_DINO_MODEL_PATH")
+        if not 0 <= self.image_retrieval_top_k <= 8:
+            errors.append("IMAGE_RETRIEVAL_TOP_K must be between 0 and 8")
         if self.max_content_length_mb <= 0:
             errors.append("MAX_CONTENT_LENGTH_MB must be positive")
         if self.model_max_concurrent_requests <= 0:

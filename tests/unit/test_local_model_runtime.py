@@ -192,6 +192,13 @@ def test_survey_event_requires_a_valid_structured_change() -> None:
     )
     assert normalized_lora_evaluation.event_type == "new_element"
 
+    catami_evaluation = _survey_event_evaluation(
+        '{"survey_value": true, "event_type": "new_element", '
+        '"new_elements": [{"category": "Biota", "name": "fish", "is_new": true}], '
+        '"description": "The scene contains a fish.", "confidence": 0.99}'
+    )
+    assert catami_evaluation.new_elements[0]["category"] == "organism"
+
     with pytest.raises(ModelOutputInvalid):
         _survey_event_evaluation(
             '{"survey_value": "false", "event_type": "major_scene_change", '

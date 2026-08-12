@@ -12,7 +12,7 @@ class BaiduSpeechClient:
         if self._client is None:
             if not all(self._credentials):
                 raise ModelUnavailableError("Baidu speech credentials are not configured")
-            from aip import AipSpeech
+            from aip import AipSpeech  # type: ignore[import-untyped]
 
             self._client = AipSpeech(*self._credentials)
         return self._client

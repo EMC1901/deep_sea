@@ -26,6 +26,7 @@ def test_pyproject_separates_remote_and_local_model_dependencies() -> None:
     assert {
         "torch",
         "torchvision==0.21.0",
+        "Pillow==12.1.1",
         "transformers==4.57.1",
         "modelscope",
         "sentence-transformers",
@@ -45,6 +46,10 @@ def test_environment_templates_keep_remote_development_disabled_by_default() -> 
     assert shared["MODEL_SERVICE_BASE_URL"].endswith(".invalid")
     assert development["MODEL_BACKEND"] == "remote"
     assert development["QWEN_MODEL_PATH"] == ""
+    assert shared["IMAGE_RETRIEVAL_ENABLED"] == "false"
+    assert development["IMAGE_RETRIEVAL_ENABLED"] == "false"
+    assert server["IMAGE_RETRIEVAL_ENABLED"] == "false"
+    assert server["IMAGE_RETRIEVAL_TOP_K"] == "4"
     assert server["MODEL_BACKEND"] == "local"
     assert server["MODEL_SERVICE_ENABLED"] == "false"
     assert server["MODEL_SERVICE_HOST"] == "127.0.0.1"
@@ -131,3 +136,32 @@ def test_private_server_tunnel_uses_a_user_supplied_identity_file() -> None:
     assert '"-i", $IdentityFile' in script
     assert '"127.0.0.1:$LocalPort`:127.0.0.1:$RemotePort"' in script
     assert "ExitOnForwardFailure=yes" in script
+
+
+def test_runtime_assets_do_not_reference_the_read_only_retrieval_reference_directory() -> None:
+    reference_directory = "no" + "_training_vlm_retrieval"
+    runtime_roots = (
+        PROJECT_ROOT / "src",
+        PROJECT_ROOT / "scripts",
+        PROJECT_ROOT / "deploy",
+        PROJECT_ROOT / "frontend",
+    )
+    templates = (
+        PROJECT_ROOT / ".env.example",
+        PROJECT_ROOT / ".env.development.example",
+        PROJECT_ROOT / ".env.server.example",
+    )
+    files = [
+        path
+        for root in runtime_roots
+        for path in root.rglob("*")
+        if path.is_file()
+    ] + list(templates)
+
+    offenders = [
+        path.relative_to(PROJECT_ROOT).as_posix()
+        for path in files
+        if reference_directory in path.read_text(encoding="utf-8", errors="ignore")
+    ]
+
+    assert offenders == []

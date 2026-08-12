@@ -8,6 +8,7 @@ bp = Blueprint("health", __name__)
 def health():
     container = current_app.extensions["container"]
     model = container.vision.health()
+    retrieval = container.image_retrieval.health()
     return jsonify(
         {
             "status": "ok",
@@ -18,5 +19,12 @@ def health():
             "rag": "loaded" if container.rag.index else "no_documents",
             "documents": len(container.rag.documents),
             "worker": "running" if container.worker.last_success_monotonic else "idle",
+            "image_retrieval": {
+                "enabled": retrieval.enabled,
+                "ready": retrieval.ready,
+                "detail": retrieval.detail,
+                "index_size": retrieval.index_size,
+                "embedding_dimension": retrieval.embedding_dimension,
+            },
         }
     )

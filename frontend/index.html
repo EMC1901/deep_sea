@@ -1684,7 +1684,7 @@
             for (const o of arr) {
                 const name = (o && o.name) ? String(o.name) : "未知";
                 const val  = (o && typeof o.count === "number") ? o.count : 1;
-                if (!counter.has(name)) counter.set(name, val);
+                counter.set(name, (counter.get(name) || 0) + val);
             }
             }
         } else {
@@ -1693,7 +1693,7 @@
             for (const f of arr) {
                 const name = (f && f.name) ? String(f.name) : "要素";
                 const val  = (f && typeof f.count === "number") ? f.count : 1;
-                if (!counter.has(name)) counter.set(name, val);
+                counter.set(name, (counter.get(name) || 0) + val);
             }
             }
         }
@@ -1794,13 +1794,14 @@
                     if (memo.session_id === state.sessionId) {
                         addMemo(memo.timestamp, memo.content);
                         
-                        if (memo.capture && memo.capture.image && memo.capture.type) {
-                            updateGallery(memo.capture.type, memo.capture.image, 
-                                          memo.capture.description, memo.timestamp, {
-                                organisms: memo.capture.organisms || [],
-                                env_features: memo.capture.env_features || []
+                        const captures = memo.captures || (memo.capture ? [memo.capture] : []);
+                        captures.forEach(capture => {
+                            if (!capture || !capture.image || !capture.type) return;
+                            updateGallery(capture.type, capture.image, capture.description, memo.timestamp, {
+                                organisms: capture.organisms || [],
+                                env_features: capture.env_features || []
                             });
-                        }
+                        });
 
                         if (!state.isQAActive) {
                             processTTSStream(memo.content + "。", "memo");
@@ -2120,12 +2121,10 @@
 
     async function pushFramesSilently() {
         if (!state.isMonitoring) return;
-        if (state.framesBuffer.length < 5) return;
+        if (state.framesBuffer.length < 1) return;
         const formData = new FormData();
-        const framesToSend = state.framesBuffer.slice(-15);
-        framesToSend.forEach((f, index) => {
-            formData.append('video', new Blob([f], { type: 'image/jpeg' }), `frame_${index}.jpg`);
-        });
+        const latest = state.framesBuffer[state.framesBuffer.length - 1];
+        formData.append('video', new Blob([latest], { type: 'image/jpeg' }), 'frame.jpg');
         try {
             await fetch(`${CONFIG.API_HOST}/videoanalyze`, {
                 method: "POST", headers: { "X-Session-ID": state.sessionId }, body: formData

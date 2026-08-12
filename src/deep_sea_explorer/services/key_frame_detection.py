@@ -11,7 +11,7 @@ import hashlib
 import threading
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -121,7 +121,12 @@ class YoloObjectDetector:
                 result.boxes.conf.tolist(),
                 result.boxes.cls.tolist(),
             ):
-                detections.append(Detection(str(names[int(class_id)]), float(confidence), tuple(map(float, box))))
+                if len(box) != 4:
+                    continue
+                left, top, right, bottom = (float(value) for value in box)
+                detections.append(
+                    Detection(str(names[int(class_id)]), float(confidence), (left, top, right, bottom))
+                )
             return detections
         except Exception:
             return []
@@ -282,7 +287,7 @@ class SceneChangeDetector:
             motion["affine_scale_x"],
             motion["affine_scale_y"],
             motion["affine_shear"],
-            motion["motion_compensated"],
+            bool(motion["motion_compensated"]),
             backend,
         )
 
