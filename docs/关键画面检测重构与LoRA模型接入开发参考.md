@@ -151,7 +151,7 @@ QWEN_ADAPTER_PATH=/sevenH/deepsea_vlm/outputs/checkpoints/qwen3_vl_2b_lora_secon
 - 服务器项目：`/projects/deep-sea-explorer-codex/app`
 - 仅使用 `ssh deepsea-codex`，仅以普通开发用户执行项目命令。
 - API、前端和语音服务仅绑定回环地址，通过 SSH 隧道供本机访问。
-- 不操作 Apache、Nginx、systemd、CUDA 驱动、系统 FFmpeg，也不读取或写入任何非本项目目录。
+- 不操作 Apache、Nginx、systemd、CUDA 驱动、系统 FFmpeg，也不读取或写入旧项目 `/projects/deep-sea-realtime`。
 - API 重启前先用 `ps` 确认项目 Gunicorn 主进程；只终止该进程。以 `setsid -f` 启动，避免 SSH 会话退出时终止服务。
 - 启动保持 `MODEL_BACKEND=local`、`MODEL_SERVICE_ENABLED=false`、`HF_HUB_OFFLINE=1`、`TRANSFORMERS_OFFLINE=1`、`IMAGE_GENERATION_ENABLED=false`，并设置上述基础模型和适配器路径。
 

@@ -13,7 +13,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,12 +121,8 @@ class YoloObjectDetector:
                 result.boxes.conf.tolist(),
                 result.boxes.cls.tolist(),
             ):
-                if len(box) != 4:
-                    continue
-                left, top, right, bottom = (float(value) for value in box)
-                detections.append(
-                    Detection(str(names[int(class_id)]), float(confidence), (left, top, right, bottom))
-                )
+                x1, y1, x2, y2 = (float(value) for value in box)
+                detections.append(Detection(str(names[int(class_id)]), float(confidence), (x1, y1, x2, y2)))
             return detections
         except Exception:
             return []
@@ -279,15 +275,15 @@ class SceneChangeDetector:
             ssim,
             flow_magnitude,
             flow_coherence,
-            motion["phase_shift_x"],
-            motion["phase_shift_y"],
-            motion["phase_response"],
-            motion["affine_angle_degrees"],
-            motion["affine_response"],
-            motion["affine_scale_x"],
-            motion["affine_scale_y"],
-            motion["affine_shear"],
-            bool(motion["motion_compensated"]),
+            cast(float, motion["phase_shift_x"]),
+            cast(float, motion["phase_shift_y"]),
+            cast(float, motion["phase_response"]),
+            cast(float, motion["affine_angle_degrees"]),
+            cast(float, motion["affine_response"]),
+            cast(float, motion["affine_scale_x"]),
+            cast(float, motion["affine_scale_y"]),
+            cast(float, motion["affine_shear"]),
+            cast(bool, motion["motion_compensated"]),
             backend,
         )
 
