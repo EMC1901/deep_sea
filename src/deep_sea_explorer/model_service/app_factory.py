@@ -201,9 +201,13 @@ def _register_routes(app: Flask) -> None:
                 "organisms": [
                     {"name": item.name, "count": item.count} for item in analysis.organisms
                 ],
-                "env_features": [
+                "substrates": [
                     {"name": item.name, "count": item.count}
-                    for item in analysis.env_features
+                    for item in analysis.substrates
+                ],
+                "geomorphologies": [
+                    {"name": item.name, "count": item.count}
+                    for item in analysis.geomorphologies
                 ],
             }
         )

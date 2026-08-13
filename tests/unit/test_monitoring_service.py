@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from deep_sea_explorer.domain.models import MonitoringAnalysis
+from deep_sea_explorer.domain.models import CountItem, MonitoringAnalysis
 from deep_sea_explorer.infrastructure.storage.memory_memo import MemoryMemoBroker
 from deep_sea_explorer.infrastructure.storage.memory_session import MemorySessionStore
 from deep_sea_explorer.infrastructure.storage.temp_file_store import TempFileStore
@@ -23,7 +23,12 @@ class Vision:
         self.started.append(image_path.read_bytes().decode("ascii"))
         while not self.release:
             time.sleep(0.002)
-        return MonitoringAnalysis(f"画面 {self.started[-1]}")
+        return MonitoringAnalysis(
+            f"画面 {self.started[-1]}",
+            organisms=(CountItem("海绵", 2),),
+            substrates=(CountItem("沙泥", 1),),
+            geomorphologies=(CountItem("平坦海床", 1),),
+        )
 
 
 class Dino:
@@ -96,3 +101,21 @@ def test_monitoring_result_is_published_as_a_memo(tmp_path: Path, valid_frame) -
     while monitored.metrics("s")["qwen_completed"] != 1 and time.time() < deadline:
         time.sleep(0.01)
     assert monitored.broker.drain("s")[0].content == "画面 one"
+
+
+def test_monitoring_result_keeps_three_tag_categories_separate(tmp_path: Path, valid_frame) -> None:
+    vision = Vision()
+    monitored = service(tmp_path, vision, Dino([[1, 0]]))
+    assert monitored.process_frame("s", b"one")["status"] == "queued"
+    deadline = time.time() + 1
+    while monitored.metrics("s")["qwen_completed"] != 1 and time.time() < deadline:
+        time.sleep(0.01)
+    memo = monitored.broker.drain("s")[0]
+    captures = {capture.type.value: capture for capture in memo.captures}
+    assert set(captures) == {"bio", "substrate", "geomorphology"}
+    assert [item.name for item in captures["bio"].organisms] == ["海绵"]
+    assert not captures["bio"].substrates and not captures["bio"].geomorphologies
+    assert [item.name for item in captures["substrate"].substrates] == ["沙泥"]
+    assert not captures["substrate"].organisms and not captures["substrate"].geomorphologies
+    assert [item.name for item in captures["geomorphology"].geomorphologies] == ["平坦海床"]
+    assert not captures["geomorphology"].organisms and not captures["geomorphology"].substrates

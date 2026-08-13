@@ -15,6 +15,8 @@ def serialize(memo):
             "description": capture.description,
             "organisms": [asdict(item) for item in capture.organisms],
             "env_features": [asdict(item) for item in capture.env_features],
+            "substrates": [asdict(item) for item in capture.substrates],
+            "geomorphologies": [asdict(item) for item in capture.geomorphologies],
         }
 
     captures = memo.captures or ((memo.capture,) if memo.capture else ())

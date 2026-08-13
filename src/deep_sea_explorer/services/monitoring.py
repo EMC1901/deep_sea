@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from deep_sea_explorer.domain.enums import CaptureType
-from deep_sea_explorer.domain.models import Capture, CountItem, Memo, MonitoringAnalysis
+from deep_sea_explorer.domain.models import Capture, Memo, MonitoringAnalysis
 from deep_sea_explorer.ports.embedding_gateway import EmbeddingGateway
 from deep_sea_explorer.ports.file_store import FileStore
 from deep_sea_explorer.ports.memo_broker import MemoBroker
@@ -143,9 +143,12 @@ class MonitoringService:
         if analysis.organisms:
             organisms = self.stats.update(state, CaptureType.BIO, analysis.organisms)
             captures.append(Capture(CaptureType.BIO, image, analysis.description, organisms=organisms))
-        if analysis.env_features:
-            features = self.stats.update(state, CaptureType.ENV, analysis.env_features)
-            captures.append(Capture(CaptureType.ENV, image, analysis.description, env_features=features))
+        if analysis.substrates:
+            substrates = self.stats.update(state, CaptureType.SUBSTRATE, analysis.substrates)
+            captures.append(Capture(CaptureType.SUBSTRATE, image, analysis.description, substrates=substrates))
+        if analysis.geomorphologies:
+            geomorphologies = self.stats.update(state, CaptureType.GEOMORPHOLOGY, analysis.geomorphologies)
+            captures.append(Capture(CaptureType.GEOMORPHOLOGY, image, analysis.description, geomorphologies=geomorphologies))
         return captures
 
     @staticmethod

@@ -7,10 +7,11 @@ import pytest
 
 from deep_sea_explorer.config import ModelBackend, Settings
 from deep_sea_explorer.container import build_local_container
-from deep_sea_explorer.domain.models import ModelHealth
+from deep_sea_explorer.domain.models import CountItem, ModelHealth
 from deep_sea_explorer.infrastructure.models.local.adapters import (
     QwenAdapter,
     _capture_decision,
+    _monitoring_analysis,
     _survey_event_evaluation,
 )
 from deep_sea_explorer.infrastructure.models.local.errors import (
@@ -359,3 +360,36 @@ def test_local_container_can_disable_image_generation_without_an_image_model() -
 
     assert settings.validate_for_runtime() == []
     assert isinstance(build_local_container(settings).image, DisabledImageGateway)
+
+
+def test_monitoring_analysis_uses_three_distinct_tag_categories() -> None:
+    analysis = _monitoring_analysis(
+        '{"description": "沙泥底质表面可见两处海绵，底面较为平坦。", '
+        '"organisms": [{"name": "海绵", "count": 2}], '
+        '"substrates": [{"name": "沙泥", "count": 1}], '
+        '"geomorphologies": [{"name": "平坦海床", "count": 1}]}'
+    )
+    assert analysis.organisms == (CountItem("海绵", 2),)
+    assert analysis.substrates == (CountItem("沙泥", 1),)
+    assert analysis.geomorphologies == (CountItem("平坦海床", 1),)
+
+
+def test_monitoring_analysis_rejects_tags_reused_across_categories() -> None:
+    with pytest.raises(ModelOutputInvalid):
+        _monitoring_analysis(
+            '{"description": "画面可见岩石。", "organisms": [], '
+            '"substrates": [{"name": "岩石", "count": 1}], '
+            '"geomorphologies": [{"name": "岩石", "count": 1}]}'
+        )
+
+
+def test_monitoring_analysis_discards_obviously_misclassified_tags() -> None:
+    analysis = _monitoring_analysis(
+        '{"description": "沙泥底质表面可见海绵，底面较为平坦。", '
+        '"organisms": [{"name": "沙泥", "count": 1}], '
+        '"substrates": [{"name": "海绵", "count": 1}], '
+        '"geomorphologies": [{"name": "鱼类", "count": 1}]}'
+    )
+    assert analysis.organisms == ()
+    assert analysis.substrates == ()
+    assert analysis.geomorphologies == ()

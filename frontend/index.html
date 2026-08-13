@@ -1390,7 +1390,8 @@
             </div>
             <div class="toggle-group">
               <button class="toggle-btn active" id="toggleBio" type="button" aria-pressed="true">生物样本</button>
-              <button class="toggle-btn" id="toggleEnv" type="button" aria-pressed="false">环境样本</button>
+              <button class="toggle-btn" id="toggleSubstrate" type="button" aria-pressed="false">底质样本</button>
+              <button class="toggle-btn" id="toggleGeomorphology" type="button" aria-pressed="false">地貌样本</button>
             </div>
           </div>
           <div class="archive-meta" style="color:var(--text-muted); font-size:0.82rem; white-space:nowrap;">
@@ -1434,37 +1435,72 @@
             </div>
           </div>
 
-          <div class="capture-pane panel-hidden" id="envPanel">
+          <div class="capture-pane panel-hidden" id="substratePanel">
             <div class="capture-display">
-              <div class="capture-empty" id="envEmpty">
+              <div class="capture-empty" id="substrateEmpty">
                 <i aria-hidden="true">◌</i>
-                <div class="empty-title">尚未捕获环境样本</div>
-                <div class="empty-action">开始监测后，系统会自动保存具有地形或环境研判价值的典型画面。</div>
+                <div class="empty-title">尚未捕获底质样本</div>
+                <div class="empty-action">开始监测后，系统会自动保存具有底质研判价值的典型画面。</div>
               </div>
-              <img id="envImage" src="" alt="捕获的深海环境样本" onclick="openModal(this.src)">
+              <img id="substrateImage" src="" alt="捕获的深海底质样本" onclick="openModal(this.src)">
             </div>
 
             <div class="capture-info">
-              <h4>环境描述</h4>
-              <p id="envDesc">系统正在分析海底地形与底质结构...</p>
+              <h4>底质描述</h4>
+              <p id="substrateDesc">系统正在分析海底地形与底质结构...</p>
             </div>
 
             <div class="capture-bottom">
-              <button class="pager-btn" id="envPrev" type="button" aria-label="上一张环境样本" disabled>←</button>
-              <span class="pager-info" id="envPager">0 / 0</span>
-              <button class="pager-btn" id="envNext" type="button" aria-label="下一张环境样本" disabled>→</button>
+              <button class="pager-btn" id="substratePrev" type="button" aria-label="上一张底质样本" disabled>←</button>
+              <span class="pager-info" id="substratePager">0 / 0</span>
+              <button class="pager-btn" id="substrateNext" type="button" aria-label="下一张底质样本" disabled>→</button>
             </div>
           </div>
 
-          <div class="stats-pane panel-hidden" id="envStatsPane">
+          <div class="stats-pane panel-hidden" id="substrateStatsPane">
             <div class="stats-header">
-              <h3>环境要素统计</h3>
+              <h3>底质统计</h3>
             </div>
-            <div class="stats-body" id="envStatsBody">
-              <div class="stats-empty" id="envStatsEmpty">
+            <div class="stats-body" id="substrateStatsBody">
+              <div class="stats-empty" id="substrateStatsEmpty">
                 <div style="font-size:2rem;" aria-hidden="true">⌁</div>
-                <div class="empty-title">暂无环境统计</div>
-                <div class="empty-action">捕获到有效环境样本后，将在这里汇总地形与环境要素。</div>
+                <div class="empty-title">暂无底质统计</div>
+                <div class="empty-action">捕获到有效底质样本后，将在这里汇总底质标签。</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="capture-pane panel-hidden" id="geomorphologyPanel">
+            <div class="capture-display">
+              <div class="capture-empty" id="geomorphologyEmpty">
+                <i aria-hidden="true">◌</i>
+                <div class="empty-title">尚未捕获地貌样本</div>
+                <div class="empty-action">开始监测后，系统会自动保存具有地貌研判价值的典型画面。</div>
+              </div>
+              <img id="geomorphologyImage" src="" alt="捕获的深海地貌样本" onclick="openModal(this.src)">
+            </div>
+
+            <div class="capture-info">
+              <h4>地貌描述</h4>
+              <p id="geomorphologyDesc">系统正在分析海底地形与地貌结构...</p>
+            </div>
+
+            <div class="capture-bottom">
+              <button class="pager-btn" id="geomorphologyPrev" type="button" aria-label="上一张地貌样本" disabled>←</button>
+              <span class="pager-info" id="geomorphologyPager">0 / 0</span>
+              <button class="pager-btn" id="geomorphologyNext" type="button" aria-label="下一张地貌样本" disabled>→</button>
+            </div>
+          </div>
+
+          <div class="stats-pane panel-hidden" id="geomorphologyStatsPane">
+            <div class="stats-header">
+              <h3>地貌统计</h3>
+            </div>
+            <div class="stats-body" id="geomorphologyStatsBody">
+              <div class="stats-empty" id="geomorphologyStatsEmpty">
+                <div style="font-size:2rem;" aria-hidden="true">⌁</div>
+                <div class="empty-title">暂无地貌统计</div>
+                <div class="empty-action">捕获到有效地貌样本后，将在这里汇总地貌标签。</div>
               </div>
             </div>
           </div>
@@ -1519,14 +1555,8 @@
         abortController: null,
 
         // 图库历史记录
-        gallery: {
-            bio: [], 
-            env: []
-        },
-        pageIndex: {
-            bio: 0,
-            env: 0
-        },
+        gallery: { bio: [], substrate: [], geomorphology: [] },
+        pageIndex: { bio: 0, substrate: 0, geomorphology: 0 },
 
         // 当前查看面板
         activePanel: "bio"
@@ -1559,22 +1589,9 @@
         closeModal: document.querySelector('.close-modal'),
 
         // 图库 DOM
-        bio: {
-            img: document.getElementById('bioImage'),
-            empty: document.getElementById('bioEmpty'),
-            desc: document.getElementById('bioDesc'),
-            pager: document.getElementById('bioPager'),
-            prev: document.getElementById('bioPrev'),
-            next: document.getElementById('bioNext')
-        },
-        env: {
-            img: document.getElementById('envImage'),
-            empty: document.getElementById('envEmpty'),
-            desc: document.getElementById('envDesc'),
-            pager: document.getElementById('envPager'),
-            prev: document.getElementById('envPrev'),
-            next: document.getElementById('envNext')
-        },
+        bio: { img: document.getElementById('bioImage'), empty: document.getElementById('bioEmpty'), desc: document.getElementById('bioDesc'), pager: document.getElementById('bioPager'), prev: document.getElementById('bioPrev'), next: document.getElementById('bioNext') },
+        substrate: { img: document.getElementById('substrateImage'), empty: document.getElementById('substrateEmpty'), desc: document.getElementById('substrateDesc'), pager: document.getElementById('substratePager'), prev: document.getElementById('substratePrev'), next: document.getElementById('substrateNext') },
+        geomorphology: { img: document.getElementById('geomorphologyImage'), empty: document.getElementById('geomorphologyEmpty'), desc: document.getElementById('geomorphologyDesc'), pager: document.getElementById('geomorphologyPager'), prev: document.getElementById('geomorphologyPrev'), next: document.getElementById('geomorphologyNext') },
 
         // 报告生成组件
         reportBtn: document.getElementById('reportBtn'),
@@ -1584,21 +1601,19 @@
         progressPercent: document.getElementById('progressPercent'),
 
         // 第二屏切换与统计
-        toggleBio: document.getElementById('toggleBio'),
-        toggleEnv: document.getElementById('toggleEnv'),
-        bioPanel: document.getElementById('bioPanel'),
-        envPanel: document.getElementById('envPanel'),
-        bioStatsPane: document.getElementById('bioStatsPane'),
-        envStatsPane: document.getElementById('envStatsPane'),
+        toggleBio: document.getElementById('toggleBio'), toggleSubstrate: document.getElementById('toggleSubstrate'), toggleGeomorphology: document.getElementById('toggleGeomorphology'),
+        bioPanel: document.getElementById('bioPanel'), substratePanel: document.getElementById('substratePanel'), geomorphologyPanel: document.getElementById('geomorphologyPanel'),
+        bioStatsPane: document.getElementById('bioStatsPane'), substrateStatsPane: document.getElementById('substrateStatsPane'), geomorphologyStatsPane: document.getElementById('geomorphologyStatsPane'),
         archiveBadge: document.getElementById('archiveBadge'),
-
-        bioStatsBody: document.getElementById('bioStatsBody'),
-        envStatsBody: document.getElementById('envStatsBody'),
-        bioStatsEmpty: document.getElementById('bioStatsEmpty'),
-        envStatsEmpty: document.getElementById('envStatsEmpty'),
-        bioStatsMeta: document.getElementById('bioStatsMeta'),
-        envStatsMeta: document.getElementById('envStatsMeta')
+        bioStatsBody: document.getElementById('bioStatsBody'), substrateStatsBody: document.getElementById('substrateStatsBody'), geomorphologyStatsBody: document.getElementById('geomorphologyStatsBody'),
+        bioStatsEmpty: document.getElementById('bioStatsEmpty'), substrateStatsEmpty: document.getElementById('substrateStatsEmpty'), geomorphologyStatsEmpty: document.getElementById('geomorphologyStatsEmpty')
     };
+
+    ['bio', 'substrate', 'geomorphology'].forEach(type => {
+        dom[type].panel = document.getElementById(`${type}Panel`); dom[type].statsPane = document.getElementById(`${type}StatsPane`);
+        dom[type].statsBody = document.getElementById(`${type}StatsBody`); dom[type].statsEmpty = document.getElementById(`${type}StatsEmpty`);
+        dom[type].toggle = document.getElementById(`toggle${type[0].toUpperCase()}${type.slice(1)}`);
+    });
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -1616,165 +1631,34 @@
         return capCanvas.toDataURL('image/jpeg', 0.85);
     }
 
-    function classifyContent(text) {
-        const bioKeywords = ["男子", "男生", "杯子", "水杯","水瓶","水壶", "鱼", "蟹", "虾", "生物"];
-        const isBio = bioKeywords.some(kw => text.includes(kw));
-        return isBio ? 'bio' : 'env';
+    function updateGallery(type, imageBase64, text, timestamp, tags = []) {
+        if (!state.gallery[type] || !Array.isArray(tags) || tags.length === 0) return;
+        state.gallery[type].unshift({ img: imageBase64, text, time: timestamp, tags });
+        if (state.gallery[type].length > 50) state.gallery[type].pop();
+        state.pageIndex[type] = 0; renderGalleryCard(type); renderStats(type);
     }
-
-    function updateGallery(type, imageBase64, text, timestamp, meta = {}) {
-        const target = state.gallery[type];
-        target.unshift({
-            img: imageBase64,
-            text: text,
-            time: timestamp,
-            organisms: meta.organisms || [],
-            env_features: meta.env_features || []
-        });
-        if (target.length > 50) target.pop();
-        state.pageIndex[type] = 0;
-        renderGalleryCard(type);
-        renderStats(type);
-    }
-
     function renderGalleryCard(type) {
-        const list = state.gallery[type];
-        const index = state.pageIndex[type];
-        const ui = dom[type];
-
-        if (list.length === 0) {
-            ui.empty.style.display = 'flex';
-            ui.img.style.display = 'none';
-            ui.pager.textContent = `0 / 0`;
-            ui.prev.disabled = true;
-            ui.next.disabled = true;
-            return;
-        }
-
-        const item = list[index];
-        ui.empty.style.display = 'none';
-        ui.img.style.display = 'block';
-        ui.img.src = item.img;
-        ui.desc.innerHTML = `<span style="color:#64748b;font-size:0.8rem">${item.time}</span><br>${item.text}`;
-        ui.pager.textContent = `${index + 1} / ${list.length}`;
-        ui.prev.disabled = (index <= 0); 
-        ui.next.disabled = (index >= list.length - 1); 
+        const list = state.gallery[type], index = state.pageIndex[type], ui = dom[type];
+        if (!list.length) { ui.empty.style.display = 'flex'; ui.img.style.display = 'none'; ui.pager.textContent = '0 / 0'; ui.prev.disabled = true; ui.next.disabled = true; return; }
+        const item = list[index]; ui.empty.style.display = 'none'; ui.img.style.display = 'block'; ui.img.src = item.img;
+        ui.desc.innerHTML = '<span style="color:#64748b;font-size:0.8rem">' + item.time + '</span><br>' + item.text;
+        ui.pager.textContent = (index + 1) + ' / ' + list.length; ui.prev.disabled = index <= 0; ui.next.disabled = index >= list.length - 1;
     }
-
-    ['bio', 'env'].forEach(type => {
-        dom[type].prev.onclick = () => {
-            if (state.pageIndex[type] > 0) {
-                state.pageIndex[type]--;
-                renderGalleryCard(type);
-            }
-        };
-        dom[type].next.onclick = () => {
-            if (state.pageIndex[type] < state.gallery[type].length - 1) {
-                state.pageIndex[type]++;
-                renderGalleryCard(type);
-            }
-        };
-    });
-
     function aggregateStats(type) {
-        const list = state.gallery[type];
         const counter = new Map();
-
-        if (type === "bio") {
-            for (const item of list) {
-            const arr = item.organisms || [];
-            for (const o of arr) {
-                const name = (o && o.name) ? String(o.name) : "未知";
-                const val  = (o && typeof o.count === "number") ? o.count : 1;
-                counter.set(name, (counter.get(name) || 0) + val);
-            }
-            }
-        } else {
-            for (const item of list) {
-            const arr = item.env_features || [];
-            for (const f of arr) {
-                const name = (f && f.name) ? String(f.name) : "要素";
-                const val  = (f && typeof f.count === "number") ? f.count : 1;
-                counter.set(name, (counter.get(name) || 0) + val);
-            }
-            }
-        }
-
-        const rows = Array.from(counter.entries()).map(([name, val]) => ({ name, val }));
-        rows.sort((a, b) => b.val - a.val);
-        return rows;
+        for (const item of state.gallery[type] || []) for (const tag of item.tags || []) { const name = tag && tag.name ? String(tag.name) : ''; const count = tag && typeof tag.count === 'number' ? tag.count : 1; if (name) counter.set(name, (counter.get(name) || 0) + count); }
+        return Array.from(counter.entries()).map(([name, val]) => ({ name, val })).sort((a, b) => b.val - a.val);
     }
-
-
     function renderStats(type) {
-        const rows = aggregateStats(type);
-        const list = state.gallery[type];
-        const maxVal = rows.length ? Math.max(...rows.map(r => r.val)) : 1;
-
-        if (type === "bio") {
-            dom.bioStatsBody.innerHTML = "";
-            if (!rows.length) {
-                dom.bioStatsBody.appendChild(dom.bioStatsEmpty);
-                dom.bioStatsEmpty.style.display = "flex";
-                return;
-            }
-            dom.bioStatsEmpty.style.display = "none";
-
-            const showRows = rows.slice(0, 12);
-            showRows.forEach(r => {
-                const row = document.createElement("div");
-                row.className = "bar-row";
-                row.innerHTML = `
-                    <div class="bar-label" title="${r.name}">${r.name}</div>
-                    <div class="bar-track"><div class="bar-fill" style="width:${Math.max(4, (r.val / maxVal) * 100)}%"></div></div>
-                    <div class="bar-val">${r.val}</div>
-                `;
-                dom.bioStatsBody.appendChild(row);
-            });
-        } else {
-            dom.envStatsBody.innerHTML = "";
-            if (!rows.length) {
-                dom.envStatsBody.appendChild(dom.envStatsEmpty);
-                dom.envStatsEmpty.style.display = "flex";
-                return;
-            }
-            dom.envStatsEmpty.style.display = "none";
-
-            const showRows = rows.slice(0, 12);
-            showRows.forEach(r => {
-                const row = document.createElement("div");
-                row.className = "bar-row";
-                row.innerHTML = `
-                    <div class="bar-label" title="${r.name}">${r.name}</div>
-                    <div class="bar-track"><div class="bar-fill" style="width:${Math.max(4, (r.val / maxVal) * 100)}%"></div></div>
-                    <div class="bar-val">${r.val}</div>
-                `;
-                dom.envStatsBody.appendChild(row);
-            });
-        }
+        const rows = aggregateStats(type), ui = dom[type], maxVal = rows.length ? Math.max(...rows.map(r => r.val)) : 1; ui.statsBody.innerHTML = '';
+        if (!rows.length) { ui.statsBody.appendChild(ui.statsEmpty); ui.statsEmpty.style.display = 'flex'; return; } ui.statsEmpty.style.display = 'none';
+        rows.slice(0, 12).forEach(r => { const row = document.createElement('div'); row.className = 'bar-row'; row.innerHTML = '<div class="bar-label" title="' + r.name + '">' + r.name + '</div><div class="bar-track"><div class="bar-fill" style="width:' + Math.max(4, (r.val / maxVal) * 100) + '%"></div></div><div class="bar-val">' + r.val + '</div>'; ui.statsBody.appendChild(row); });
     }
-
     function setActivePanel(type) {
-        state.activePanel = type;
-        const isBio = type === "bio";
-        dom.toggleBio.classList.toggle("active", isBio);
-        dom.toggleEnv.classList.toggle("active", !isBio);
-        dom.toggleBio.setAttribute("aria-pressed", String(isBio));
-        dom.toggleEnv.setAttribute("aria-pressed", String(!isBio));
-
-        dom.bioPanel.classList.toggle("panel-hidden", !isBio);
-        dom.bioStatsPane.classList.toggle("panel-hidden", !isBio);
-        dom.envPanel.classList.toggle("panel-hidden", isBio);
-        dom.envStatsPane.classList.toggle("panel-hidden", isBio);
-
-        dom.archiveBadge.textContent = isBio ? "生物" : "环境";
-        dom.archiveBadge.style.color = isBio ? "#38bdf8" : "#4ade80";
-
-        renderGalleryCard(type);
-        renderStats(type);
+        state.activePanel = type; ['bio', 'substrate', 'geomorphology'].forEach(name => { const active = name === type, ui = dom[name]; ui.toggle.classList.toggle('active', active); ui.toggle.setAttribute('aria-pressed', String(active)); ui.panel.classList.toggle('panel-hidden', !active); ui.statsPane.classList.toggle('panel-hidden', !active); });
+        dom.archiveBadge.textContent = type === 'bio' ? '生物' : type === 'substrate' ? '底质' : '地貌'; renderGalleryCard(type); renderStats(type);
     }
-    dom.toggleBio.onclick = () => setActivePanel("bio");
-    dom.toggleEnv.onclick = () => setActivePanel("env");
+    ['bio', 'substrate', 'geomorphology'].forEach(type => { dom[type].prev.onclick = () => { if (state.pageIndex[type] > 0) { state.pageIndex[type]--; renderGalleryCard(type); } }; dom[type].next.onclick = () => { if (state.pageIndex[type] < state.gallery[type].length - 1) { state.pageIndex[type]++; renderGalleryCard(type); } }; dom[type].toggle.onclick = () => setActivePanel(type); });
 
     // =========================================
     // 3. 核心逻辑：Memo 轮询与视频流
@@ -1799,10 +1683,10 @@
                         const captures = memo.captures || (memo.capture ? [memo.capture] : []);
                         captures.forEach(capture => {
                             if (!capture || !capture.image || !capture.type) return;
-                            updateGallery(capture.type, capture.image, capture.description, memo.timestamp, {
-                                organisms: capture.organisms || [],
-                                env_features: capture.env_features || []
-                            });
+                            const captureTags = capture.type === 'bio' ? (capture.organisms || [])
+                                : capture.type === 'substrate' ? (capture.substrates || [])
+                                : capture.type === 'geomorphology' ? (capture.geomorphologies || []) : [];
+                            updateGallery(capture.type, capture.image, capture.description, memo.timestamp, captureTags);
                         });
 
                         if (!state.isQAActive) {
@@ -1961,35 +1845,7 @@
     }
 
     function toSamples(type) {
-        return (state.gallery[type] || []).map((item, index) => {
-            let detectedNames = [];
-            const description = item.text || "";
-            
-            if (type === "bio") {
-                const rawNames = (item.organisms || []).map(o => o.name).filter(n => n);
-                detectedNames = rawNames.filter(name => description.includes(name));
-                if (detectedNames.length === 0 && rawNames.length > 0) {
-                    detectedNames = [rawNames[0]];
-                }
-            } else {
-                const rawNames = (item.env_features || []).map(f => f.name).filter(n => n);
-                detectedNames = rawNames.filter(name => description.includes(name));
-                if (detectedNames.length === 0 && rawNames.length > 0) {
-                    detectedNames = [rawNames[0]];
-                }
-            }
-
-            let finalName = detectedNames.length > 0 
-                            ? detectedNames.join("和") 
-                            : (type === "bio" ? "典型生物样本" : "环境地形样本");
-
-            return {
-                name: finalName,
-                image: item.img,
-                description: description,
-                time: item.time || ""
-            };
-        });
+        return (state.gallery[type] || []).map(item => { const description = item.text || ''; const names = (item.tags || []).map(tag => tag.name).filter(Boolean); const detected = names.filter(name => description.includes(name)); const fallback = type === 'bio' ? '生物' : type === 'substrate' ? '底质' : '地貌'; return { name: (detected.length ? detected : names).join('和') || '典型' + fallback + '样本', image: item.img, description, time: item.time || '' }; });
     }
     function toStats(type) {
         return aggregateStats(type).map(r => ({ name: r.name, count: r.val }));
@@ -2038,9 +1894,11 @@
         });
 
         const bio_samples = toSamples("bio");
-        const env_samples = toSamples("env");
+        const substrate_samples = toSamples("substrate");
         const bio_stats = toStats("bio");
-        const env_stats = toStats("env");
+        const substrate_stats = toStats("substrate");
+        const geomorphology_samples = toSamples("geomorphology");
+        const geomorphology_stats = toStats("geomorphology");
 
         const meta = {
         session_id: state.sessionId,
@@ -2048,7 +1906,7 @@
         frame_rate_ms: CONFIG.FRAME_RATE,
         push_interval_ms: CONFIG.PUSH_INTERVAL,
         memo_interval_ms: CONFIG.MEMO_INTERVAL,
-        stat_policy: "bio按count累加；env按出现次数累加"
+        stat_policy: "生物、底质、地貌标签均只在本类别内按count累加"
         };
 
         let progress = 0;
@@ -2062,7 +1920,7 @@
             const res = await fetch(`${CONFIG.API_HOST}/generate_report`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ memos, chats, bio_samples, env_samples, bio_stats, env_stats, meta })
+                body: JSON.stringify({ memos, chats, bio_samples, substrate_samples, geomorphology_samples, bio_stats, substrate_stats, geomorphology_stats, meta })
             });
             clearInterval(progressInterval);
             

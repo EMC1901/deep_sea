@@ -28,6 +28,8 @@ class Capture:
     description: str
     organisms: tuple[CountItem, ...] = ()
     env_features: tuple[CountItem, ...] = ()
+    substrates: tuple[CountItem, ...] = ()
+    geomorphologies: tuple[CountItem, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +48,8 @@ class MonitoringAnalysis:
     description: str
     organisms: tuple[CountItem, ...] = ()
     env_features: tuple[CountItem, ...] = ()
+    substrates: tuple[CountItem, ...] = ()
+    geomorphologies: tuple[CountItem, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,7 +81,7 @@ class SessionState:
     last_analyzed_video: str | None = None
     is_answering: bool = False
     cumulative_stats: dict[str, dict[str, int]] = field(
-        default_factory=lambda: {"bio": {}, "env": {}}
+        default_factory=lambda: {"bio": {}, "env": {}, "substrate": {}, "geomorphology": {}}
     )
     last_active_monotonic: float = 0.0
     # Event-driven monitoring state. Kept on the session so one process can resume

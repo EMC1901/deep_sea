@@ -90,7 +90,13 @@ class RemoteVisionGateway:
                 for item in values or []
                 if isinstance(item, dict) and str(item.get("name", "")).strip()
             )
-        return MonitoringAnalysis(description.strip(), items(body.get("organisms")), items(body.get("env_features")))
+        return MonitoringAnalysis(
+            description.strip(),
+            items(body.get("organisms")),
+            items(body.get("env_features")),
+            items(body.get("substrates")),
+            items(body.get("geomorphologies")),
+        )
 
     def answer(self, question: str) -> Iterator[StreamEvent]:
         with self.client.stream(

@@ -451,3 +451,20 @@ def test_model_service_actual_video_validation_accepts_a_readable_file() -> None
         service_api._verify_upload(path, "video")
     finally:
         path.unlink(missing_ok=True)
+
+
+def test_model_service_monitoring_frame_returns_three_categories(monkeypatch: pytest.MonkeyPatch, fake_container: SimpleNamespace) -> None:
+    from deep_sea_explorer.domain.models import MonitoringAnalysis
+    fake_container.vision.analyze_monitoring_frame = lambda _: MonitoringAnalysis(
+        "沙泥底质表面可见海绵，底面较为平坦。",
+        organisms=(CountItem("海绵", 1),),
+        substrates=(CountItem("沙泥", 1),),
+        geomorphologies=(CountItem("平坦海床", 1),),
+    )
+    monkeypatch.setattr(service_api, "_verify_upload", lambda path, kind: None)
+    app = service_api.create_app(service_settings(), fake_container)
+    response = app.test_client().post("/v1/vision/analyze-monitoring-frame", headers=headers(), data={"image": (io.BytesIO(b"image"), "frame.jpg")})
+    assert response.status_code == 200
+    assert {"description", "organisms", "substrates", "geomorphologies"}.issubset(response.json)
+    assert response.json["substrates"][0]["name"] == "沙泥"
+    assert response.json["geomorphologies"][0]["name"] == "平坦海床"

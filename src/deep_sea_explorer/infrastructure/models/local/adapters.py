@@ -44,14 +44,33 @@ VIDEO_DESCRIPTION_PROMPT = """
 """.strip()
 
 MONITORING_FRAME_PROMPT = """
-请分析这张深海监测画面，只输出一个 JSON 对象，不要 Markdown 或解释：
+你是深海影像科学解译员。独立分析这一张图，只输出一个 JSON 对象，不要 Markdown、推理过程或其他文字。
+必须先根据图像中可直接观察到的证据，分别形成三类标签，然后再依据这些标签和图像生成客观描述。
+
+严格使用此结构：
 {
-  "description": "一至两句简体中文的当前场景描述",
-  "organisms": [{"name": "可见生物名称或类群", "count": 1}],
-  "env_features": [{"name": "可见底质、地貌或环境特征", "count": 1}]
+  "organisms": [{"name": "可见生物类群或形态名称", "count": 1}],
+  "substrates": [{"name": "可见底质名称", "count": 1}],
+  "geomorphologies": [{"name": "可见地貌名称", "count": 1}],
+  "description": "一至三句简体中文科学解说式客观描述"
 }
-description 必须非空。organisms 和 env_features 必须始终为数组；没有明确可见要素时使用空数组。
-不要描述处理过程、不要比较其他图像、不要猜测看不清的物种。
+
+分类规则：
+- organisms 只能包含可见生物，如鱼类、甲壳类、珊瑚、海绵、藻类、水螅珊瑚等；禁止放入底质或地貌。
+- substrates 只能包含底面物质，如沙、泥、沙泥、岩石、砾石、未固结沉积物；禁止放入生物或地貌。
+- geomorphologies 只能包含可辨认的地形结构，如平坦海床、坡地、沟槽、岩脊、凹地、岩壁；禁止放入生物或底质。
+- 同一标签只能出现在一个数组；三个数组始终存在。未能从图像明确确认的类别必须输出空数组，不得猜测物种级名称。
+- 每项 name 为简体中文短标签；count 为图中可辨认的数量。对底质和地貌可用 1 表示该特征可见。
+
+描述规则：
+- description 必须依据上述三个数组及图像证据，使用自然、连贯的科学解说式语言。
+- 只陈述可观察的底质、生物类型、形态特征、数量及空间分布关系；不使用文学化或评价性措辞，不说明用途，不作图像证据之外的推断。
+- 不要出现“可能”“推测”“似乎”“丰富”“优美”“壮观”等不确定或评价性表达；不要报告处理步骤、标签数组或 JSON 字段名。
+
+语言风格参考：
+“这片海底以柔软的沙泥底质为主，分布有附着性海绵、杯状海绵、大型石珊瑚、黑珊瑚和八放珊瑚。水螅珊瑚和丛生的丝状大型藻类也分布在底质表面，局部区域可见微藻覆盖。”
+“柔软的沙泥底质上分布着石珊瑚和扇形黑色八放珊瑚，其中部分八放珊瑚具有白色脉纹。周围还分布有附着性红色钙质大型藻类、丛生的丝状藻类、直立海绵和水螅珊瑚，并可见少量鱼类活动。”
+“该区域以岩石底质为主，其间夹杂未固结的沙泥斑块。底质上分布有黄色杯状管海绵、绿色块状海绵、结壳型钙质大型红藻、丛生的丝状大型藻类、黑色八放珊瑚和块状石珊瑚，同时可见直立海绵、壳状海绵以及微藻。”
 """.strip()
 
 SURVEY_EVENT_PROMPT = """
@@ -616,13 +635,66 @@ def _monitoring_analysis(raw: str) -> MonitoringAnalysis:
         description = value.get("description")
         if not isinstance(description, str) or not description.strip():
             raise ValueError("monitoring description is invalid")
+        raw_organisms = _count_items(value.get("organisms"))
+        raw_substrates = _count_items(value.get("substrates"))
+        raw_geomorphologies = _count_items(value.get("geomorphologies"))
+        _ensure_distinct_monitoring_tags(raw_organisms, raw_substrates, raw_geomorphologies)
+        organisms = _monitoring_items(raw_organisms, "organisms")
+        substrates = _monitoring_items(raw_substrates, "substrates")
+        geomorphologies = _monitoring_items(raw_geomorphologies, "geomorphologies")
         return MonitoringAnalysis(
             description.strip(),
-            _count_items(value.get("organisms")),
-            _count_items(value.get("env_features")),
+            organisms,
+            (),
+            substrates,
+            geomorphologies,
         )
     except (TypeError, ValueError, json.JSONDecodeError) as error:
         raise ModelOutputInvalid("monitoring analysis is invalid") from error
+
+
+_MONITORING_TAG_RULES = {
+    "organisms": {
+        "required": (),
+        "forbidden": ("沙", "泥", "砾", "底质", "海床", "坡", "沟", "岩脊", "凹地", "地貌"),
+    },
+    "substrates": {
+        "required": ("沙", "泥", "砾", "岩", "沉积", "底质"),
+        "forbidden": ("鱼", "虾", "蟹", "珊瑚", "海绵", "藻", "水螅"),
+    },
+    "geomorphologies": {
+        "required": ("海床", "坡", "沟", "脊", "凹", "岩壁", "地形", "地貌", "平坦"),
+        "forbidden": ("鱼", "虾", "蟹", "珊瑚", "海绵", "藻", "水螅", "沙泥"),
+    },
+}
+
+
+def _monitoring_items(values: object | tuple[CountItem, ...], category: str) -> tuple[CountItem, ...]:
+    """Normalize category-local Qwen tags and discard labels from another category."""
+    items = values if isinstance(values, tuple) else _count_items(values)
+    rules = _MONITORING_TAG_RULES[category]
+    seen: set[str] = set()
+    cleaned: list[CountItem] = []
+    for item in items:
+        name = " ".join(item.name.split()).strip("，,；;。.")
+        key = name.casefold()
+        has_required = not rules["required"] or any(token in name for token in rules["required"])
+        has_forbidden = any(token in name for token in rules["forbidden"])
+        if not name or key in seen or not has_required or has_forbidden or item.count < 1 or item.count > 1_000_000:
+            continue
+        seen.add(key)
+        cleaned.append(CountItem(name, item.count))
+    return tuple(cleaned)
+
+
+def _ensure_distinct_monitoring_tags(*groups: tuple[CountItem, ...]) -> None:
+    seen: set[str] = set()
+    for group in groups:
+        for item in group:
+            key = item.name.casefold()
+            if key in seen:
+                raise ValueError("monitoring label appears in multiple categories")
+            seen.add(key)
 
 
 def _survey_event_evaluation(raw: str) -> SurveyEventEvaluation:
