@@ -54,6 +54,11 @@ class Settings:
     image_retrieval_top_k: int = 4
     image_retrieval_device: str = "auto"
     image_retrieval_exclude_same_site: bool = False
+    monitoring_dino_model_path: str = ""
+    monitoring_dino_device: str = "auto"
+    monitoring_blur_threshold: float = 35.0
+    monitoring_similarity_threshold: float = 0.7
+    monitoring_queue_capacity: int = 10
     image_generation_enabled: bool = True
     image_model_path: str = ""
     yolo_model_path: str = ""
@@ -127,6 +132,17 @@ class Settings:
             image_retrieval_exclude_same_site=_as_bool(
                 env.get("IMAGE_RETRIEVAL_EXCLUDE_SAME_SITE")
             ),
+            monitoring_dino_model_path=env.get(
+                "MONITORING_DINO_MODEL_PATH", env.get("IMAGE_RETRIEVAL_DINO_MODEL_PATH", "")
+            ),
+            monitoring_dino_device=env.get(
+                "MONITORING_DINO_DEVICE", env.get("IMAGE_RETRIEVAL_DEVICE", "auto")
+            ),
+            monitoring_blur_threshold=float(env.get("MONITORING_BLUR_THRESHOLD", "35")),
+            monitoring_similarity_threshold=float(
+                env.get("MONITORING_SIMILARITY_THRESHOLD", "0.7")
+            ),
+            monitoring_queue_capacity=_as_int(env.get("MONITORING_QUEUE_CAPACITY"), 10),
             image_generation_enabled=_as_bool(env.get("IMAGE_GENERATION_ENABLED"), True),
             image_model_path=env.get("IMAGE_MODEL_PATH", ""),
             yolo_model_path=env.get("YOLO_MODEL_PATH", ""),
@@ -183,6 +199,12 @@ class Settings:
                 errors.append("enabled image retrieval requires IMAGE_RETRIEVAL_DINO_MODEL_PATH")
         if not 0 <= self.image_retrieval_top_k <= 8:
             errors.append("IMAGE_RETRIEVAL_TOP_K must be between 0 and 8")
+        if not 0 <= self.monitoring_similarity_threshold <= 1:
+            errors.append("MONITORING_SIMILARITY_THRESHOLD must be between 0 and 1")
+        if self.monitoring_blur_threshold < 0:
+            errors.append("MONITORING_BLUR_THRESHOLD must not be negative")
+        if self.monitoring_queue_capacity <= 0:
+            errors.append("MONITORING_QUEUE_CAPACITY must be positive")
         if self.max_content_length_mb <= 0:
             errors.append("MAX_CONTENT_LENGTH_MB must be positive")
         if self.model_max_concurrent_requests <= 0:

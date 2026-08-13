@@ -1490,7 +1490,7 @@
         TTS_HOST: window.APP_CONFIG.speechBaseUrl,
         FRAME_RATE: 200,        // 抓帧频率
         MEMO_INTERVAL: 1000,    // 备忘录轮询
-        PUSH_INTERVAL: 1000,    // 推流频率
+        PUSH_INTERVAL: 50,      // 顺序上传队列1中的每一帧
         MAX_FRAMES: 150
     };
 
@@ -1501,6 +1501,8 @@
         isProcessingQA: false,
         sessionId: 'sess_' + Math.random().toString(36).substr(2, 9),
         framesBuffer: [],
+        uploadBuffer: [],
+        uploadInFlight: false,
         intervals: { capture: null, memo: null, push: null },
 
         // 音频状态
@@ -1931,6 +1933,7 @@
         }
         
         state.framesBuffer = [];
+        state.uploadBuffer = [];
     }
 
     function resetReportUI() {
@@ -2109,6 +2112,8 @@
                 const uint8 = new Uint8Array(buffer);
                 state.framesBuffer.push(uint8);
                 if (state.framesBuffer.length > CONFIG.MAX_FRAMES) state.framesBuffer.shift();
+                state.uploadBuffer.push(uint8);
+                if (state.uploadBuffer.length > CONFIG.MAX_FRAMES) state.uploadBuffer.shift();
                 updateStats();
             });
         }, 'image/jpeg', 0.6);
@@ -2120,16 +2125,21 @@
     }
 
     async function pushFramesSilently() {
-        if (!state.isMonitoring) return;
-        if (state.framesBuffer.length < 1) return;
+        if (!state.isMonitoring || state.uploadInFlight || state.uploadBuffer.length < 1) return;
+        // Queue 1 remains a rolling history; uploadBuffer tracks sequential transport separately.
+        const frame = state.uploadBuffer.shift();
+        state.uploadInFlight = true;
         const formData = new FormData();
-        const latest = state.framesBuffer[state.framesBuffer.length - 1];
-        formData.append('video', new Blob([latest], { type: 'image/jpeg' }), 'frame.jpg');
+        formData.append('video', new Blob([frame], { type: 'image/jpeg' }), 'frame.jpg');
         try {
             await fetch(`${CONFIG.API_HOST}/videoanalyze`, {
                 method: "POST", headers: { "X-Session-ID": state.sessionId }, body: formData
             });
         } catch (e) { console.warn(e); }
+        finally {
+            state.uploadInFlight = false;
+            updateStats();
+        }
     }
 
     async function handleUserSubmit() {
@@ -2152,17 +2162,15 @@
 
         state.abortController = new AbortController();
 
-        const formData = new FormData();
-        formData.append('question', text);
-        const framesToSend = state.framesBuffer.slice(-15);
-        framesToSend.forEach((f, index) => {
-            formData.append('video', new Blob([f], { type: 'image/jpeg' }), `frame_${index}.jpg`);
-        });
-
         try {
             const response = await fetch(`${CONFIG.API_HOST}/videoanalyze`, {
-                method: "POST", headers: { "X-Session-ID": state.sessionId },
-                body: formData, signal: state.abortController.signal
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Session-ID": state.sessionId
+                },
+                body: JSON.stringify({ question: text }),
+                signal: state.abortController.signal
             });
 
             if (!response.ok) throw new Error("Backend Error");
@@ -2191,28 +2199,6 @@
                             dom.chatBox.scrollTop = dom.chatBox.scrollHeight;
                             processTTSStream(data.text, "qa");
                         } 
-                        else if (data.type === "image") {
-                            console.log("🎨 接收到生成图片");
-                            const imgDiv = document.createElement('div');
-                            imgDiv.className = 'img-container';
-                            const loader = document.createElement('div');
-                            loader.className = 'img-loading-overlay';
-                            loader.innerHTML = `<div class="loading-spinner"></div><span class="loading-text">RENDERING NEURAL IMAGE...</span>`;
-                            const img = document.createElement('img');
-                            img.className = 'img-generated';
-                            img.src = "data:image/jpeg;base64," + data.content;
-                            img.onclick = function() { openModal(this.src); };
-                            imgDiv.appendChild(loader); imgDiv.appendChild(img);
-                            aiMsgContent.parentNode.appendChild(imgDiv);
-                            dom.chatBox.scrollTop = dom.chatBox.scrollHeight;
-                            img.onload = () => {
-                                setTimeout(() => {
-                                    loader.style.opacity = '0';
-                                    img.classList.add('loaded');
-                                    setTimeout(() => loader.remove(), 500);
-                                }, 800);
-                            };
-                        }
                         else if (data.type === "error") {
                             console.error("后端报错:", data.text);
                             aiMsgContent.textContent += "\n[系统错误] " + data.text;

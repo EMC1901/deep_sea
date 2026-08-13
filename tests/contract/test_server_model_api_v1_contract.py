@@ -115,15 +115,14 @@ def test_remote_clients_follow_frozen_v1_contract() -> None:
     image = RemoteImageGateway(client)
     memo = RemoteEmbeddingGateway(client, "memo")
     rag = RemoteEmbeddingGateway(client, "rag")
-    video = Path(__file__)
     frame = Path(__file__)
 
     assert vision.health().ready is True
-    assert vision.describe_video(video) == "视频描述"
+    assert vision.describe_video(Path(__file__)) == "视频描述"
     decision = vision.evaluate_frame(frame)
     assert decision.category is CaptureType.BIO
     assert decision.organisms[0].name == "虾"
-    assert [(event.type, event.text) for event in vision.answer(video, "有什么？")] == [
+    assert [(event.type, event.text) for event in vision.answer("有什么？")] == [
         (StreamEventType.CHUNK, "答"),
         (StreamEventType.FINAL, ""),
     ]
@@ -150,11 +149,10 @@ def test_remote_clients_follow_frozen_v1_contract() -> None:
     for request_id in request_ids:
         UUID(request_id)
 
-    multipart_requests = fake_api.requests[1:4]
+    multipart_requests = fake_api.requests[1:3]
     assert b'name="video"' in multipart_requests[0].content
     assert b'name="image"' in multipart_requests[1].content
-    assert b'name="video"' in multipart_requests[2].content
-    assert b'name="question"\r\n\r\n' in multipart_requests[2].content
+    assert json.loads(fake_api.requests[3].content) == {"question": "有什么？"}
     assert json.loads(fake_api.requests[4].content) == {"material": {"memos": [], "chats": []}}
     assert json.loads(fake_api.requests[6].content)["model"] == "memo"
     assert json.loads(fake_api.requests[7].content)["model"] == "rag"

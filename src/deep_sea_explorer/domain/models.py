@@ -40,6 +40,15 @@ class Memo:
 
 
 @dataclass(frozen=True, slots=True)
+class MonitoringAnalysis:
+    """Single-image Qwen result emitted by the simplified monitoring pipeline."""
+
+    description: str
+    organisms: tuple[CountItem, ...] = ()
+    env_features: tuple[CountItem, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class RagDocumentChunk:
     content: str
     doc_id: str

@@ -51,16 +51,17 @@ from deep_sea_explorer.services.question_answering import QuestionAnsweringServi
 from deep_sea_explorer.services.rag_service import RagService
 from deep_sea_explorer.services.report_service import ReportService
 from deep_sea_explorer.services.video_ingestion import VideoIngestionService
-from deep_sea_explorer.services.key_frame_detection import (
-    NullObjectDetector,
-    ObjectDetector,
-    SceneChangeDetector,
-    YoloObjectDetector,
-)
 from deep_sea_explorer.workers.memo_worker import MemoWorker
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+class _UnavailableMonitoringDinoEncoder:
+    """Defer a missing optional model-path error until monitoring receives a frame."""
+
+    def embed_image(self, _path: object) -> object:
+        raise RuntimeError("MONITORING_DINO_MODEL_PATH is not configured")
 
 
 @dataclass(slots=True)
@@ -89,6 +90,7 @@ def _build(
     memo_embedding: EmbeddingGateway,
     rag_embedding: EmbeddingGateway,
     image_retrieval: ImageRetrievalGateway | None = None,
+    monitoring_dino_encoder: object | None = None,
 ) -> ApplicationContainer:
     retrieval = image_retrieval or UnavailableImageRetrievalGateway(
         "image retrieval is disabled", enabled=False
@@ -99,19 +101,21 @@ def _build(
     stats = CaptureStatsService()
     ingestion = VideoIngestionService(files, sessions, settings.max_frames_per_request)
     rag = RagService(rag_embedding)
-    detector: ObjectDetector = NullObjectDetector()
-    if settings.yolo_model_path:
-        detector = YoloObjectDetector(settings.yolo_model_path, settings.yolo_confidence)
+    dino_encoder = monitoring_dino_encoder
+    if dino_encoder is None:
+        dino_encoder = (
+            DinoV2ImageEncoder(settings.monitoring_dino_model_path, device=settings.monitoring_dino_device)
+            if settings.monitoring_dino_model_path
+            else _UnavailableMonitoringDinoEncoder()
+        )
     monitoring = MonitoringService(
         vision, memo_embedding, sessions, memos, files, stats, settings.memo_similarity_threshold,
-        detector=detector,
-        scene_detector=SceneChangeDetector(settings.scene_change_threshold, settings.scene_confirm_frames),
-        event_store=EventStore(settings.data_dir),
-        image_retrieval=retrieval,
-        retrieval_top_k=settings.image_retrieval_top_k,
-        retrieval_exclude_same_site=settings.image_retrieval_exclude_same_site,
+        dino_encoder=dino_encoder,
+        queue_capacity=settings.monitoring_queue_capacity,
+        blur_threshold=settings.monitoring_blur_threshold,
+        similarity_threshold=settings.monitoring_similarity_threshold,
     )
-    questions = QuestionAnsweringService(vision, image, rag, sessions)
+    questions = QuestionAnsweringService(vision, sessions)
     reports = ReportService(vision, ReportLabRenderer(settings.report_font_path), files)
     return ApplicationContainer(
         settings,
@@ -133,12 +137,18 @@ def _build(
 
 
 def build_fake_container(settings: Settings) -> ApplicationContainer:
+    class FakeDinoEncoder:
+        def embed_image(self, _path):
+            import numpy as np
+            return np.array([1.0, 0.0], dtype=np.float32)
+
     return _build(
         settings,
         FakeVisionGateway(),
         FakeImageGateway(),
         FakeEmbeddingGateway(),
         FakeEmbeddingGateway(),
+        monitoring_dino_encoder=FakeDinoEncoder(),
     )
 
 
@@ -182,6 +192,11 @@ def build_local_container(settings: Settings) -> ApplicationContainer:
             EmbeddingAdapter("minilm", settings.rag_embedding_model_path, 384, trust_remote_code=False),
         ),
         _build_local_image_retrieval(settings, runtime.coordinator),
+        (
+            DinoV2ImageEncoder(settings.monitoring_dino_model_path, device=settings.monitoring_dino_device)
+            if settings.monitoring_dino_model_path
+            else _UnavailableMonitoringDinoEncoder()
+        ),
     )
 
 

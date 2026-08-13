@@ -191,6 +191,23 @@ def _register_routes(app: Flask) -> None:
             }
         )
 
+    @app.post(f"{API_PREFIX}/vision/analyze-monitoring-frame")
+    def analyze_monitoring_frame() -> Response:
+        with _uploaded_file("image") as image_path:
+            analysis = _container().vision.analyze_monitoring_frame(image_path)
+        return _json_response(
+            {
+                "description": analysis.description,
+                "organisms": [
+                    {"name": item.name, "count": item.count} for item in analysis.organisms
+                ],
+                "env_features": [
+                    {"name": item.name, "count": item.count}
+                    for item in analysis.env_features
+                ],
+            }
+        )
+
     @app.post(f"{API_PREFIX}/vision/evaluate-survey-event")
     def evaluate_survey_event() -> Response:
         """Evaluate two JPEGs plus detector metadata; no video or embedding is involved."""
@@ -223,18 +240,18 @@ def _register_routes(app: Flask) -> None:
 
     @app.post(f"{API_PREFIX}/vision/answer")
     def answer() -> Response:
-        question = request.form.get("question", "").strip()
+        body = _json_object({"question"})
+        question = body.get("question")
+        if not isinstance(question, str):
+            raise ApiProblem(400, "INVALID_INPUT", "question must be a string")
+        question = question.strip()
         if not question or len(question) > _settings().max_question_length:
             raise ApiProblem(400, "INVALID_INPUT", "question is required and exceeds the allowed length")
-        video_path = _save_uploaded_file("video")
-
-        def cleanup() -> None:
-            video_path.unlink(missing_ok=True)
 
         def events() -> Iterator[str]:
             try:
                 output_chars = 0
-                for event in _container().vision.answer(video_path, question):
+                for event in _container().vision.answer(question):
                     if event.type is StreamEventType.CHUNK:
                         output_chars += len(event.text)
                         yield _ndjson({"type": "delta", "text": event.text})
@@ -256,11 +273,8 @@ def _register_routes(app: Flask) -> None:
                 yield _ndjson(
                     {"type": "error", "code": "MODEL_FAILURE", "message": "model inference failed"}
                 )
-            finally:
-                cleanup()
 
         response = Response(stream_with_context(events()), content_type="application/x-ndjson")
-        response.call_on_close(cleanup)
         return response
 
     @app.post(f"{API_PREFIX}/vision/summarize-report")

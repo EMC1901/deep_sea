@@ -72,10 +72,8 @@ class FakeVision:
             organisms=(CountItem("fish", 1),),
         )
 
-    def answer(self, path: Path, question: str):
-        assert path.is_file()
+    def answer(self, question: str):
         assert question == "what happened?"
-        self.uploads.append(path)
         yield StreamEvent(StreamEventType.CHUNK, text="answer")
         yield StreamEvent(StreamEventType.FINAL, text="answer")
 
@@ -181,7 +179,7 @@ def test_model_service_v1_routes_follow_contract_and_cleanup_uploads(
     answer = client.post(
         "/v1/vision/answer",
         headers=headers(),
-        data={"video": (io.BytesIO(b"video"), "clip.mp4"), "question": "what happened?"},
+        json={"question": "what happened?"},
     )
     assert answer.content_type.startswith("application/x-ndjson")
     assert answer.data.splitlines() == [
@@ -257,7 +255,7 @@ def test_model_service_logs_streaming_model_failure_without_request_secrets(
         response = app.test_client().post(
             "/v1/vision/answer",
             headers=request_headers,
-            data={"video": (io.BytesIO(b"video"), "clip.mp4"), "question": "what happened?"},
+            json={"question": "what happened?"},
         )
 
     assert response.status_code == 200
@@ -287,7 +285,7 @@ def test_remote_client_works_against_the_fake_model_service_contract(
         assert vision.health().ready is True
         assert vision.describe_video(video_path) == "video description"
         assert vision.evaluate_frame(image_path).category is CaptureType.BIO
-        assert [event.type for event in vision.answer(video_path, "what happened?")] == [
+        assert [event.type for event in vision.answer("what happened?")] == [
             StreamEventType.CHUNK,
             StreamEventType.FINAL,
         ]
@@ -333,9 +331,18 @@ def test_model_service_rejects_unauthorized_and_invalid_requests(fake_container:
     empty_question = client.post(
         "/v1/vision/answer",
         headers=headers(),
-        data={"video": (io.BytesIO(b"video"), "clip.mp4"), "question": ""},
+        json={"question": ""},
     )
-    assert (missing_video.status_code, empty_question.status_code) == (400, 400)
+    multipart_question = client.post(
+        "/v1/vision/answer",
+        headers=headers(),
+        data={"question": "hello", "video": (io.BytesIO(b"video"), "clip.mp4")},
+    )
+    assert (missing_video.status_code, empty_question.status_code, multipart_question.status_code) == (
+        400,
+        400,
+        400,
+    )
 
 
 def test_model_service_rejects_undecodable_upload_and_removes_it(
@@ -425,7 +432,7 @@ def test_model_service_removes_upload_when_streaming_client_disconnects(
         "/v1/vision/answer",
         method="POST",
         headers=headers(),
-        data={"video": (io.BytesIO(b"video"), "clip.mp4"), "question": "what happened?"},
+        json={"question": "what happened?"},
         buffered=False,
     )
     response.close()

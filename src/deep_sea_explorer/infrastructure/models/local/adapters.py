@@ -13,7 +13,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from deep_sea_explorer.domain.enums import CaptureType
-from deep_sea_explorer.domain.models import CaptureDecision, CountItem, ModelHealth
+from deep_sea_explorer.domain.models import CaptureDecision, CountItem, ModelHealth, MonitoringAnalysis
 from deep_sea_explorer.services.key_frame_detection import SurveyEventEvaluation
 from deep_sea_explorer.domain.report_material import compact_report_material
 
@@ -41,6 +41,17 @@ VIDEO_DESCRIPTION_PROMPT = """
 描述应优先说明可见生物、底质或环境特征及明显变化，不要使用标题、列表或 Markdown。
 输出必须以中文为主；若物种、设备、地质构造等专有名词没有通用中文译名，可以保留其原文，
 但其余叙述必须使用简体中文。
+""".strip()
+
+MONITORING_FRAME_PROMPT = """
+请分析这张深海监测画面，只输出一个 JSON 对象，不要 Markdown 或解释：
+{
+  "description": "一至两句简体中文的当前场景描述",
+  "organisms": [{"name": "可见生物名称或类群", "count": 1}],
+  "env_features": [{"name": "可见底质、地貌或环境特征", "count": 1}]
+}
+description 必须非空。organisms 和 env_features 必须始终为数组；没有明确可见要素时使用空数组。
+不要描述处理过程、不要比较其他图像、不要猜测看不清的物种。
 """.strip()
 
 SURVEY_EVENT_PROMPT = """
@@ -216,19 +227,17 @@ class QwenAdapter(LocalAdapter):
             raise ModelOutputInvalid("local qwen video description is not Chinese")
         return rewritten
 
-    def answer(self, video_path: Path, question: str) -> str:
+    def answer(self, question: str) -> str:
         if not question.strip():
             raise InvalidModelInput("question must not be empty")
-        return self._generate(
-            [{"type": "video", "video": self._video_frames(video_path)}, {"type": "text", "text": question.strip()}]
-        )
+        return self._generate([{"type": "text", "text": question.strip()}])
 
-    def answer_stream(self, video_path: Path, question: str) -> Iterator[str]:
+    def answer_stream(self, question: str) -> Iterator[str]:
         if not question.strip():
             raise InvalidModelInput("question must not be empty")
         _, model, processor = self.resource
         inputs = self._inputs(
-            [{"type": "video", "video": self._video_frames(video_path)}, {"type": "text", "text": question.strip()}],
+            [{"type": "text", "text": question.strip()}],
             processor,
         )
         from transformers import TextIteratorStreamer  # type: ignore[import-not-found]
@@ -288,6 +297,19 @@ class QwenAdapter(LocalAdapter):
             ]
         )
         return _capture_decision(raw)
+
+    def analyze_monitoring_frame(self, image_path: Path) -> MonitoringAnalysis:
+        if not image_path.is_file():
+            raise InvalidModelInput("monitoring image does not exist")
+        raw = self._generate(
+            [
+                {"type": "image", "image": self._load_rgb_image(image_path)},
+                {"type": "text", "text": MONITORING_FRAME_PROMPT},
+            ],
+            max_new_tokens=256,
+            direct_response=True,
+        )
+        return _monitoring_analysis(raw)
 
     def evaluate_survey_event(self, reference_image: Path | None, current_image: Path, metadata: dict[str, object]) -> SurveyEventEvaluation:
         if not current_image.is_file():
@@ -581,6 +603,26 @@ def _capture_decision(raw: str) -> CaptureDecision:
         )
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
         raise ModelOutputInvalid("local qwen frame decision is invalid") from error
+
+
+def _monitoring_analysis(raw: str) -> MonitoringAnalysis:
+    start, end = raw.find("{"), raw.rfind("}")
+    if start < 0 or end <= start:
+        raise ModelOutputInvalid("monitoring analysis is not JSON")
+    try:
+        value = json.loads(raw[start : end + 1])
+        if not isinstance(value, dict):
+            raise TypeError("monitoring analysis must be an object")
+        description = value.get("description")
+        if not isinstance(description, str) or not description.strip():
+            raise ValueError("monitoring description is invalid")
+        return MonitoringAnalysis(
+            description.strip(),
+            _count_items(value.get("organisms")),
+            _count_items(value.get("env_features")),
+        )
+    except (TypeError, ValueError, json.JSONDecodeError) as error:
+        raise ModelOutputInvalid("monitoring analysis is invalid") from error
 
 
 def _survey_event_evaluation(raw: str) -> SurveyEventEvaluation:

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from deep_sea_explorer.domain.enums import CaptureType, StreamEventType
 from deep_sea_explorer.domain.exceptions import ModelUnavailableError
-from deep_sea_explorer.domain.models import CaptureDecision, CountItem, ModelHealth, StreamEvent
+from deep_sea_explorer.domain.models import CaptureDecision, CountItem, ModelHealth, MonitoringAnalysis, StreamEvent
 from deep_sea_explorer.services.key_frame_detection import SurveyEventEvaluation
 
 from .client import RemoteModelClient
@@ -73,12 +73,30 @@ class RemoteVisionGateway:
             items(data.get("env_features")),
         )
 
-    def answer(self, video_path: Path, question: str) -> Iterator[StreamEvent]:
+    def analyze_monitoring_frame(self, image_path: Path) -> MonitoringAnalysis:
+        body = self.client.json_body(
+            self.client.request(
+                "POST",
+                "/vision/analyze-monitoring-frame",
+                files=self._file(image_path, "image", "image/jpeg"),
+            )
+        )
+        description = body.get("description")
+        if not isinstance(description, str) or not description.strip():
+            raise ModelUnavailableError("remote monitoring analysis is invalid")
+        def items(values):
+            return tuple(
+                CountItem(str(item.get("name", "")), int(item.get("count", 1)))
+                for item in values or []
+                if isinstance(item, dict) and str(item.get("name", "")).strip()
+            )
+        return MonitoringAnalysis(description.strip(), items(body.get("organisms")), items(body.get("env_features")))
+
+    def answer(self, question: str) -> Iterator[StreamEvent]:
         with self.client.stream(
             "POST",
             "/vision/answer",
-            files=self._file(video_path, "video", "video/mp4"),
-            data={"question": question},
+            json={"question": question},
         ) as response:
             for raw_line in response.iter_lines():
                 if not raw_line.strip():

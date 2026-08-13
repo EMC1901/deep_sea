@@ -1,42 +1,34 @@
+"""Simplified real-time pipeline: validate -> DINOv2 deduplicate -> Qwen."""
+
 from __future__ import annotations
 
 import base64
 import logging
+import threading
+import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from collections.abc import Callable
-from dataclasses import asdict
-from typing import TypeVar
+
+import numpy as np
 
 from deep_sea_explorer.domain.enums import CaptureType
-from deep_sea_explorer.domain.retrieval import ImageRetrievalQuery, RetrievedImage
-from deep_sea_explorer.domain.models import Capture, CountItem, Memo, SessionState
-from deep_sea_explorer.infrastructure.storage.event_store import EventStore
+from deep_sea_explorer.domain.models import Capture, CountItem, Memo, MonitoringAnalysis
 from deep_sea_explorer.ports.embedding_gateway import EmbeddingGateway
 from deep_sea_explorer.ports.file_store import FileStore
-from deep_sea_explorer.ports.image_retrieval import ImageRetrievalGateway
 from deep_sea_explorer.ports.memo_broker import MemoBroker
 from deep_sea_explorer.ports.model_gateway import VisionModelGateway
 from deep_sea_explorer.ports.session_store import SessionStore
 from deep_sea_explorer.services.capture_stats import CaptureStatsService
-from deep_sea_explorer.services.candidate_queue import PerSessionEventQueue
-from deep_sea_explorer.services.key_frame_detection import (
-    ByteTrackState,
-    CandidateEvent,
-    NullObjectDetector,
-    ObjectDetector,
-    SceneChangeDetector,
-    SurveyEventEvaluation,
-    make_candidate,
-)
-from deep_sea_explorer.services.image_retrieval import map_labels_to_survey_categories
+from deep_sea_explorer.services.monitoring_queue import MonitoringFrame, PerSessionFrameQueue
 
 
 LOGGER = logging.getLogger(__name__)
-T = TypeVar("T")
 
 
 class MonitoringService:
+    """Per-session real-time monitoring without detection, retrieval, or event comparison."""
+
     def __init__(
         self,
         vision: VisionModelGateway,
@@ -46,279 +38,174 @@ class MonitoringService:
         files: FileStore,
         stats: CaptureStatsService,
         threshold: float,
-        detector: ObjectDetector | None = None,
-        scene_detector: SceneChangeDetector | None = None,
-        event_store: EventStore | None = None,
-        image_retrieval: ImageRetrievalGateway | None = None,
-        retrieval_top_k: int = 4,
-        retrieval_exclude_same_site: bool = False,
+        *,
+        dino_encoder: object,
+        queue_capacity: int = 10,
+        blur_threshold: float = 35.0,
+        similarity_threshold: float = 0.7,
     ) -> None:
-        (
-            self.vision,
-            self.embedding,
-            self.sessions,
-            self.broker,
-            self.files,
-            self.stats,
-            self.threshold,
-        ) = vision, embedding, sessions, broker, files, stats, threshold
-        self.detector = detector or NullObjectDetector()
-        self.scene_detector = scene_detector or SceneChangeDetector()
-        self.event_store = event_store or EventStore(files.root / "data")
-        self.image_retrieval = image_retrieval
-        self.retrieval_top_k = retrieval_top_k
-        self.retrieval_exclude_same_site = retrieval_exclude_same_site
-        self._trackers: dict[str, ByteTrackState] = {}
-        self._confirmed_tracks: dict[str, set[int]] = {}
-        self._scene_detectors: dict[str, SceneChangeDetector] = {}
-        self._queues = PerSessionEventQueue(self._evaluate_candidate, self._complete_candidate)
+        self.vision = vision
+        self.embedding = embedding
+        self.sessions = sessions
+        self.broker = broker
+        self.files = files
+        self.stats = stats
+        self.threshold = threshold
+        self.dino_encoder = dino_encoder
+        self.blur_threshold = blur_threshold
+        self.similarity_threshold = similarity_threshold
+        self._queue = PerSessionFrameQueue(queue_capacity, self._analyze, self._complete)
+        self._tail_embeddings: dict[str, np.ndarray] = {}
+        self._metrics: dict[str, dict[str, float | int]] = {}
+        self._lock = threading.RLock()
 
     def process_frame(self, session_id: str, frame: bytes | Path) -> dict[str, object]:
-        """Ingest one JPEG and emit at most one replaceable candidate per session."""
-        state = self.sessions.get(session_id)
+        """Apply both filters and submit an accepted JPEG to the bounded Qwen FIFO."""
+        received = time.monotonic()
+        self.sessions.get(session_id)
         frame_path = self.files.frame_path(session_id)
         try:
-            if isinstance(frame, Path):
-                frame_path.write_bytes(frame.read_bytes())
-            else:
-                frame_path.write_bytes(frame)
-            if not frame_path.read_bytes().startswith(b"\xff\xd8"):
-                raise ValueError("frame must be a JPEG")
-            tracker = self._trackers.setdefault(session_id, ByteTrackState())
-            detections = self.detector.detect(frame_path)
-            tracks, _ = tracker.update(detections)
-            confirmed = self._confirmed_tracks.setdefault(session_id, set())
-            new_tracks = [track for track in tracks if track.continuous_frames >= tracker.confirm_frames and track.track_id not in confirmed]
-            confirmed.update(track.track_id for track in new_tracks)
-            scene_detector = self._scene_detectors.setdefault(
-                session_id,
-                SceneChangeDetector(
-                    self.scene_detector.threshold,
-                    self.scene_detector.confirm_frames,
-                    analysis_size=self.scene_detector.analysis_size,
-                    gpu_enabled=self.scene_detector.gpu_enabled,
-                ),
-            )
-            reference = Path(state.last_scene_reference) if state.last_scene_reference else scene_detector.reference
-            had_reference = reference is not None and reference.is_file()
-            metrics = scene_detector.compare(frame_path, reference)
-            if not had_reference:
-                reference = self.event_store.save_reference(session_id, frame_path)
-                scene_detector.accept(reference)
-            trigger_parts = []
-            if new_tracks:
-                trigger_parts.append("yolo")
-            if metrics.changed:
-                trigger_parts.append("scene")
-            if not trigger_parts:
-                return {"status": "monitoring", "candidate": False, "scene_change_metrics": asdict(metrics)}
-            candidate = make_candidate(session_id, frame_path, reference, new_tracks, metrics, "+".join(trigger_parts))
-            candidate_path = self.event_store.save_candidate(candidate)
-            candidate = candidate.__class__(candidate.candidate_id, candidate.session_id, candidate.captured_at, candidate_path, candidate.reference_image_path, candidate.yolo_changes, candidate.scene_change_metrics, candidate.trigger_type, candidate.signature)
-            state.pending_candidate = candidate
-            state.model_task_in_flight = self._queues.state(session_id)[0]
-            self._queues.submit(candidate)
-            state.model_task_in_flight = True
-            return {"status": "candidate_pending", "candidate": True, "candidate_id": candidate.candidate_id, "scene_change_metrics": asdict(metrics)}
-        finally:
+            frame_path.write_bytes(frame.read_bytes() if isinstance(frame, Path) else frame)
+            sharpness = self._decode_and_sharpness(frame_path)
+        except ValueError as error:
             frame_path.unlink(missing_ok=True)
+            self._increment(session_id, "rejected_undecodable")
+            return self._response(session_id, "rejected_undecodable", detail=str(error))
+        if sharpness < self.blur_threshold:
+            frame_path.unlink(missing_ok=True)
+            self._increment(session_id, "rejected_blurry")
+            return self._response(session_id, "rejected_blurry", sharpness=round(sharpness, 3))
 
-    def _evaluate_candidate(self, candidate: CandidateEvent) -> SurveyEventEvaluation:
-        metadata: dict[str, object] = {
-            "yolo_changes": list(candidate.yolo_changes),
-            "scene_change_metrics": candidate.scene_change_metrics,
-            "trigger_type": candidate.trigger_type,
-        }
-        self._add_retrieval_context(candidate, metadata)
-        return self.vision.evaluate_survey_event(candidate.reference_image_path, candidate.current_image_path, metadata)
-
-    def _add_retrieval_context(
-        self,
-        candidate: CandidateEvent,
-        metadata: dict[str, object],
-    ) -> None:
-        """Add optional visual examples while preserving the original VLM fallback."""
-
-        if self.image_retrieval is None or self.retrieval_top_k == 0:
-            return
         try:
-            results = self.image_retrieval.retrieve(
-                ImageRetrievalQuery(
-                    candidate.current_image_path,
-                    k=self.retrieval_top_k,
-                    exclude_same_site=self.retrieval_exclude_same_site,
-                )
-            )
-            metadata["retrieval_context"] = self._serialize_retrieval_context(results)
+            embedding = np.asarray(self.dino_encoder.embed_image(frame_path), dtype=np.float32).reshape(-1)
+            if embedding.size == 0 or not np.isfinite(embedding).all():
+                raise ValueError("DINOv2 embedding is invalid")
+            with self._lock:
+                previous = self._tail_embeddings.get(session_id)
+            similarity = float(np.dot(embedding, previous)) if previous is not None else None
         except Exception as error:
-            # Retrieval is advisory.  The unchanged two-image evaluation must
-            # still run if its encoder, index, or source gallery is unavailable.
-            LOGGER.warning(
-                "image retrieval degraded session_id=%s candidate_id=%s error_type=%s",
-                candidate.session_id,
-                candidate.candidate_id,
-                type(error).__name__,
-            )
-            metadata["retrieval_context"] = []
-            metadata["retrieval_degraded"] = type(error).__name__
+            frame_path.unlink(missing_ok=True)
+            self._increment(session_id, "rejected_dino_error")
+            LOGGER.warning("monitoring DINO filter failed session_id=%s error_type=%s", session_id, type(error).__name__)
+            return self._response(session_id, "rejected_dino_error")
+        if similarity is not None and similarity >= self.similarity_threshold:
+            frame_path.unlink(missing_ok=True)
+            self._increment(session_id, "rejected_similar")
+            return self._response(session_id, "rejected_similar", similarity=round(similarity, 4))
 
-    @staticmethod
-    def _serialize_retrieval_context(results: tuple[RetrievedImage, ...]) -> list[dict[str, object]]:
-        context: list[dict[str, object]] = []
-        for result in results:
-            image_path = result.image_path
-            if image_path is None or not image_path.is_file():
-                continue
-            labels = {category: list(values) for category, values in result.labels.items()}
-            context.append(
-                {
-                    "image_id": result.image_id,
-                    "image_path": str(image_path),
-                    "site": result.site,
-                    "similarity": result.similarity,
-                    "labels": labels,
-                    "survey_labels": {
-                        category: list(values)
-                        for category, values in map_labels_to_survey_categories(result.labels).items()
-                    },
-                }
-            )
-        return context
+        submission = self._queue.submit(MonitoringFrame(session_id, frame_path, received))
+        with self._lock:
+            self._tail_embeddings[session_id] = embedding
+        self._increment(session_id, "accepted")
+        if submission.dropped_oldest:
+            self._increment(session_id, "queue2_dropped_oldest")
+        return self._response(
+            session_id,
+            "queued",
+            sharpness=round(sharpness, 3),
+            similarity=None if similarity is None else round(similarity, 4),
+            queue2_waiting=submission.waiting,
+            queue2_dropped_oldest=submission.dropped_oldest,
+        )
 
-    def _complete_candidate(
-        self,
-        candidate: CandidateEvent,
-        evaluation: SurveyEventEvaluation,
-    ) -> None:
-        state = self.sessions.get(candidate.session_id)
+    def _analyze(self, frame: MonitoringFrame) -> MonitoringAnalysis:
+        return self.vision.analyze_monitoring_frame(frame.image_path)
+
+    def _complete(self, frame: MonitoringFrame, analysis: MonitoringAnalysis, elapsed: float) -> None:
+        state = self.sessions.get(frame.session_id)
         state.model_task_in_flight = False
         state.last_model_call_time = datetime.now().timestamp()
-        state.pending_candidate = None
-        accepted = evaluation.survey_value and evaluation.event_type in {"new_element", "major_scene_change"} and bool(evaluation.new_elements or evaluation.scene_changed)
-        if not accepted or state.active_event_signature == candidate.signature:
-            return
-        image_path = self.event_store.accept(candidate, evaluation)
-        state.active_event_signature = candidate.signature
-        state.last_accepted_frame = str(image_path)
-        state.last_scene_reference = str(candidate.current_image_path)
-        self._scene_detectors.setdefault(candidate.session_id, self.scene_detector).accept(candidate.current_image_path)
-        captures = self._event_captures(state, evaluation, image_path)
+        captures = self._captures(state, analysis, frame.image_path)
         self.broker.publish(
             Memo(
                 datetime.now().strftime("%H:%M:%S"),
-                evaluation.description,
-                candidate.session_id,
+                analysis.description,
+                frame.session_id,
                 captures[0] if captures else None,
                 tuple(captures),
             )
         )
+        with self._lock:
+            metrics = self._session_metrics(frame.session_id)
+            metrics["qwen_completed"] += 1
+            metrics["qwen_total_seconds"] += elapsed
+            metrics["end_to_end_total_seconds"] += time.monotonic() - frame.captured_monotonic
+        LOGGER.info(
+            "monitoring frame completed session_id=%s qwen_seconds=%.3f end_to_end_seconds=%.3f",
+            frame.session_id,
+            elapsed,
+            time.monotonic() - frame.captured_monotonic,
+        )
 
-    def _event_captures(
-        self,
-        state: SessionState,
-        evaluation: SurveyEventEvaluation,
-        image_path: Path,
-    ) -> list[Capture]:
-        elements = getattr(evaluation, "observed_elements", ()) or evaluation.new_elements
-        organisms = tuple(
-            CountItem(str(item["name"]), 1)
-            for item in elements
-            if item.get("category") == "organism"
-        )
-        env_features = tuple(
-            CountItem(str(item["name"]), 1)
-            for item in elements
-            if item.get("category") in {"seabed_substrate", "micro_topography", "other"}
-        )
+    def _captures(self, state: object, analysis: MonitoringAnalysis, image_path: Path) -> list[Capture]:
         image = self._data_uri(image_path)
         captures: list[Capture] = []
-        if organisms:
-            self.stats.update(state, CaptureType.BIO, organisms)
-            captures.append(Capture(CaptureType.BIO, image, evaluation.description, organisms=organisms))
-        if env_features:
-            self.stats.update(state, CaptureType.ENV, env_features)
-            captures.append(
-                Capture(CaptureType.ENV, image, evaluation.description, env_features=env_features)
-            )
+        if analysis.organisms:
+            organisms = self.stats.update(state, CaptureType.BIO, analysis.organisms)
+            captures.append(Capture(CaptureType.BIO, image, analysis.description, organisms=organisms))
+        if analysis.env_features:
+            features = self.stats.update(state, CaptureType.ENV, analysis.env_features)
+            captures.append(Capture(CaptureType.ENV, image, analysis.description, env_features=features))
         return captures
 
-    def process_session(self, session_id: str) -> Memo | None:
-        state = self.sessions.get(session_id)
-        if (
-            state.is_answering
-            or not state.latest_video
-            or state.latest_video == state.last_analyzed_video
-        ):
-            return None
-        video_path = Path(state.latest_video)
-        content = self._stage(
-            session_id, "describe_video", lambda: self.vision.describe_video(video_path)
-        )
-        vector = tuple(
-            self._stage(session_id, "memo_embedding", lambda: self.embedding.embed([content]))[0]
-        )
-        if state.last_memo_embedding:
-            similarity = sum(left * right for left, right in zip(vector, state.last_memo_embedding))
-            if similarity >= self.threshold:
-                state.last_analyzed_video = str(video_path)
-                return None
-        state.last_memo_embedding = vector
-        capture = self._capture_or_none(session_id, state, video_path)
-        memo = Memo(datetime.now().strftime("%H:%M:%S"), content, session_id, capture)
-        self.broker.publish(memo)
-        state.last_analyzed_video = str(video_path)
-        return memo
-
-    def _capture_or_none(
-        self,
-        session_id: str,
-        state: SessionState,
-        video_path: Path,
-    ) -> Capture | None:
-        frame_path: Path | None = None
-        stage = "frame_path"
+    @staticmethod
+    def _decode_and_sharpness(path: Path) -> float:
         try:
-            frame_path = self.files.frame_path(session_id)
-            stage = "extract_last_frame"
-            self._last_frame(video_path, frame_path)
-            stage = "evaluate_frame"
-            decision = self.vision.evaluate_frame(frame_path)
-            if decision.is_deepsea and decision.is_typical:
-                if decision.category.value == "bio":
-                    stage = "update_bio_stats"
-                    organisms = self.stats.update(state, decision.category, decision.organisms)
-                    stage = "encode_capture"
-                    return Capture(
-                        decision.category,
-                        self._data_uri(frame_path),
-                        decision.description,
-                        organisms=organisms,
-                    )
-                else:
-                    stage = "update_env_stats"
-                    features = self.stats.update(state, decision.category, decision.env_features)
-                    stage = "encode_capture"
-                    return Capture(
-                        decision.category,
-                        self._data_uri(frame_path),
-                        decision.description,
-                        env_features=features,
-                    )
-            return None
-        except Exception as error:
-            LOGGER.exception(
-                "monitoring capture_degraded session_id=%s stage=%s error_type=%s",
-                session_id,
-                stage,
-                type(error).__name__,
-            )
-            return None
-        finally:
-            if frame_path is not None:
-                frame_path.unlink(missing_ok=True)
+            import cv2
+            import numpy as np
+
+            decoded = cv2.imdecode(np.frombuffer(path.read_bytes(), np.uint8), cv2.IMREAD_COLOR)
+        except ImportError as error:  # pragma: no cover - common dependency
+            raise ValueError("OpenCV is unavailable") from error
+        if decoded is None or decoded.size == 0:
+            raise ValueError("JPEG cannot be decoded")
+        gray = cv2.cvtColor(decoded, cv2.COLOR_BGR2GRAY)
+        return float(cv2.Laplacian(gray, cv2.CV_64F).var())
+
+    def _response(self, session_id: str, status: str, **extra: object) -> dict[str, object]:
+        in_flight, waiting = self._queue.state(session_id)
+        state = self.sessions.get(session_id)
+        state.model_task_in_flight = in_flight
+        return {"status": status, "queue2_in_flight": in_flight, "queue2_waiting": waiting, "metrics": self.metrics(session_id), **extra}
+
+    def _increment(self, session_id: str, key: str) -> None:
+        with self._lock:
+            self._session_metrics(session_id)[key] += 1
+
+    def _session_metrics(self, session_id: str) -> dict[str, float | int]:
+        return self._metrics.setdefault(
+            session_id,
+            {
+                "accepted": 0,
+                "rejected_undecodable": 0,
+                "rejected_blurry": 0,
+                "rejected_similar": 0,
+                "rejected_dino_error": 0,
+                "queue2_dropped_oldest": 0,
+                "qwen_completed": 0,
+                "qwen_total_seconds": 0.0,
+                "end_to_end_total_seconds": 0.0,
+            },
+        )
+
+    def metrics(self, session_id: str) -> dict[str, float | int]:
+        with self._lock:
+            metrics = dict(self._session_metrics(session_id))
+        in_flight, waiting = self._queue.state(session_id)
+        metrics["queue2_in_flight"] = int(in_flight)
+        metrics["queue2_waiting"] = waiting
+        completed = int(metrics["qwen_completed"])
+        metrics["qwen_average_seconds"] = round(float(metrics["qwen_total_seconds"]) / completed, 4) if completed else 0.0
+        metrics["end_to_end_average_seconds"] = round(float(metrics["end_to_end_total_seconds"]) / completed, 4) if completed else 0.0
+        return metrics
+
+    def process_session(self, session_id: str) -> None:
+        """The old video polling path is intentionally inactive for real-time monitoring."""
+        return None
 
     @staticmethod
-    def _stage(session_id: str, stage: str, operation: Callable[[], T]) -> T:
+    def _stage(session_id: str, stage: str, operation: Callable[[], object]) -> object:
+        """Retained for legacy worker diagnostics outside the real-time path."""
         try:
             return operation()
         except Exception as error:
@@ -329,18 +216,6 @@ class MonitoringService:
                 type(error).__name__,
             )
             raise
-
-    @staticmethod
-    def _last_frame(video_path: Path, output: Path) -> None:
-        import cv2
-
-        capture = cv2.VideoCapture(str(video_path))
-        capture.set(cv2.CAP_PROP_POS_FRAMES, max(0, int(capture.get(cv2.CAP_PROP_FRAME_COUNT)) - 1))
-        ok, frame = capture.read()
-        capture.release()
-        if not ok:
-            raise ValueError("video has no readable frame")
-        cv2.imwrite(str(output), frame)
 
     @staticmethod
     def _data_uri(path: Path) -> str:

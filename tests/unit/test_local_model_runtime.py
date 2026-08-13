@@ -232,6 +232,20 @@ def test_report_summary_requests_chinese_and_removes_markdown(
     assert summary == "任务总结 发现深海生物，并建议继续观测。"
 
 
+def test_text_answer_sends_no_video_to_qwen(monkeypatch: pytest.MonkeyPatch) -> None:
+    adapter = QwenAdapter("/models/qwen")
+    captured: dict[str, object] = {}
+
+    def generate(content: list[dict[str, object]], **_: object) -> str:
+        captured["content"] = content
+        return "这是纯文本回答。"
+
+    monkeypatch.setattr(adapter, "_generate", generate)
+
+    assert adapter.answer("你好") == "这是纯文本回答。"
+    assert captured["content"] == [{"type": "text", "text": "你好"}]
+
+
 def test_video_description_keeps_chinese_with_an_original_proper_noun(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

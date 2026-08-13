@@ -13,10 +13,17 @@ fi
 
 cd -- "${PROJECT_ROOT}"
 if [[ -f "${RETRIEVAL_ENV}" ]]; then
-    # This optional file holds only IMAGE_RETRIEVAL_* values, never secrets.
+    # The frozen DINOv2 weights are shared by retrieval (when enabled) and
+    # real-time frame filtering. This file contains no credentials.
     set -a
     . "${RETRIEVAL_ENV}"
     set +a
+fi
+if [[ -z "${MONITORING_DINO_MODEL_PATH:-}" && -n "${IMAGE_RETRIEVAL_DINO_MODEL_PATH:-}" ]]; then
+    export MONITORING_DINO_MODEL_PATH="${IMAGE_RETRIEVAL_DINO_MODEL_PATH}"
+fi
+if [[ -z "${MONITORING_DINO_DEVICE:-}" && -n "${IMAGE_RETRIEVAL_DEVICE:-}" ]]; then
+    export MONITORING_DINO_DEVICE="${IMAGE_RETRIEVAL_DEVICE}"
 fi
 exec "${GUNICORN}" --config "${PROJECT_ROOT}/deploy/gunicorn_api.conf.py" \
     deep_sea_explorer.production_wsgi:app

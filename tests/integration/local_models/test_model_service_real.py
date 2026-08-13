@@ -69,7 +69,7 @@ def test_server_model_api_runs_all_real_models() -> None:
         assert vision.health().ready is True
         assert vision.describe_video(video_path).strip()
         assert vision.evaluate_frame(image_path).category in {CaptureType.BIO, CaptureType.ENV}
-        events = list(vision.answer(video_path, "What changes occur in this video?"))
+        events = list(vision.answer("请简要介绍深海探测任务。"))
         assert any(event.type is StreamEventType.CHUNK and event.text for event in events)
         assert events[-1].type is StreamEventType.FINAL
         assert vision.summarize_report({"memos": [], "chats": []}).strip()
