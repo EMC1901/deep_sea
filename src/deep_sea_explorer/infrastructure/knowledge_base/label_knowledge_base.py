@@ -9,6 +9,7 @@ import re
 import sqlite3
 import time
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
@@ -342,7 +343,10 @@ class LabelKnowledgeBase:
         retry_generator: Callable[[Path, str], str] | None = None,
         max_attempts: int = 3,
         limit: int | None = None,
+        workers: int = 1,
     ) -> dict[str, int]:
+        if workers < 1:
+            raise ValueError("workers must be positive")
         statuses = ("pending", "failed") if retry_failed else ("pending",)
         rows = self.db.execute(
             f"SELECT canonical_label, category, representative_image, attempts FROM labels WHERE status IN ({','.join('?' for _ in statuses)}) AND attempts < ? ORDER BY canonical_label",
@@ -351,7 +355,8 @@ class LabelKnowledgeBase:
         if limit is not None:
             rows = rows[:limit]
         result: Counter[str] = Counter()
-        for row in rows:
+
+        def generate_row(row: sqlite3.Row) -> tuple[sqlite3.Row, int, object, str | None, Exception | None]:
             label, category = str(row["canonical_label"]), str(row["category"])
             attempts = int(row["attempts"]) + 1
             response: object = None
@@ -361,13 +366,31 @@ class LabelKnowledgeBase:
                 description, error = validate_description(clean_description(response, category), category)
                 if error:
                     raise ValueError(error)
+            except Exception as error:
+                return row, attempts, response, None, error
+            return row, attempts, response, description, None
+
+        def persist(outcome: tuple[sqlite3.Row, int, object, str | None, Exception | None]) -> None:
+            row, attempts, response, description, error = outcome
+            label = str(row["canonical_label"])
+            if error is None:
                 self.db.execute("UPDATE labels SET status='complete', description=?, raw_response=NULL, attempts=?, last_error=NULL, updated_at=? WHERE canonical_label=?", (description, attempts, _now(), label))
                 result["complete"] += 1
-            except Exception as error:
+            else:
                 raw_response = response if isinstance(response, str) else None
                 self.db.execute("UPDATE labels SET status='failed', raw_response=?, attempts=?, last_error=?, updated_at=? WHERE canonical_label=?", (raw_response, attempts, f"{type(error).__name__}: {error}"[:1000], _now(), label))
                 result["failed"] += 1
             self.db.commit()
+
+        if workers == 1:
+            for row in rows:
+                persist(generate_row(row))
+        else:
+            # HTTP calls run in parallel; SQLite writes remain checkpointed on this thread.
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = [executor.submit(generate_row, row) for row in rows]
+                for future in as_completed(futures):
+                    persist(future.result())
         self.write_exports()
         return dict(result)
 

@@ -189,20 +189,20 @@ class _ApiSession:
 def test_api_generator_forwards_exact_prompt_and_uses_final_message_content(tmp_path: Path) -> None:
     image = tmp_path / "representative.jpg"
     image.write_bytes(b"jpeg-bytes")
-    session = _ApiSession(_ApiResponse({"choices": [{"message": {"reasoning_content": "do not use", "content": "\u5bf9\u8c61\u8868\u9762\u53ef\u89c1\u591a\u4e2a\u5b54\u6d1e\uff0c\u8fb9\u7f18\u5f62\u6001\u4e0d\u89c4\u5219\uff0c\u5c40\u90e8\u7eb9\u7406\u53ef\u8fa8\u3002"}}]}))
-    generator = QwenApiGenerator("https://example.test/api/v1/", "qwen-test", "secret-value", timeout=12.0, session=session)
+    session = _ApiSession(_ApiResponse({"output": {"choices": [{"message": {"reasoning_content": "do not use", "content": [{"text": "\u5bf9\u8c61\u8868\u9762\u53ef\u89c1\u591a\u4e2a\u5b54\u6d1e\uff0c\u8fb9\u7f18\u5f62\u6001\u4e0d\u89c4\u5219\uff0c\u5c40\u90e8\u7eb9\u7406\u53ef\u8fa8\u3002"}]}}]}}))
+    generator = QwenApiGenerator("https://example.test/api/v1/", "qwen-test", "secret-value\r\n", timeout=12.0, session=session)
 
     assert generator(image, "PROMPT-EXACT") == "\u5bf9\u8c61\u8868\u9762\u53ef\u89c1\u591a\u4e2a\u5b54\u6d1e\uff0c\u8fb9\u7f18\u5f62\u6001\u4e0d\u89c4\u5219\uff0c\u5c40\u90e8\u7eb9\u7406\u53ef\u8fa8\u3002"
     call = session.calls[0]
-    assert call["endpoint"] == "https://example.test/api/v1/chat/completions"
+    assert call["endpoint"] == "https://example.test/api/v1/services/aigc/multimodal-generation/generation"
     assert call["timeout"] == 12.0
-    assert call["headers"] == {"Authorization": "Bearer secret-value", "Content-Type": "application/json"}
+    assert call["headers"] == {"Authorization": "Bearer secret-value", "Content-Type": "application/json", "X-DashScope-SSE": "disable"}
     payload = call["json"]
     assert isinstance(payload, dict)
     assert payload["model"] == "qwen-test"
-    content = payload["messages"][0]["content"]
-    assert content[0] == {"type": "text", "text": "PROMPT-EXACT"}
-    assert content[1]["image_url"]["url"].endswith("anBlZy1ieXRlcw==")
+    content = payload["input"]["messages"][0]["content"]
+    assert content[0] == {"text": "PROMPT-EXACT"}
+    assert content[1]["image"].endswith("anBlZy1ieXRlcw==")
 
 
 def test_api_generator_does_not_expose_secret_in_errors(tmp_path: Path) -> None:
@@ -241,5 +241,31 @@ def test_reset_descriptions_preserves_catalog_and_clears_old_responses(tmp_path:
         ]
         assert builder.catalog_counts() == {CATEGORY_BIO: 1, CATEGORY_SUBSTRATE: 0, CATEGORY_GEOMORPHOLOGY: 1, "unclassified": 0}
         assert builder._metadata("description_backend") == "api:qwen3-vl-235b-a22b-thinking"
+    finally:
+        builder.close()
+
+
+def test_parallel_description_generation_checkpoints_all_results(tmp_path: Path) -> None:
+    image_root = tmp_path / "images"
+    image_root.mkdir()
+    _write_image(image_root / "bio.jpg", sharp=True)
+    _write_image(image_root / "bed.jpg", sharp=True)
+    builder = LabelKnowledgeBase(tmp_path / "knowledge-base", PromptTemplates.from_file(PROMPT_FILE), blur_threshold=1.0)
+    try:
+        builder.prepare(
+            [
+                Annotation("bio.jpg", ("Biota > Sponges",), "a.json", 0),
+                Annotation("bed.jpg", ("No bedforms",), "a.json", 1),
+            ],
+            {"bio": "bio.jpg", "bed": "bed.jpg"},
+            image_root,
+        )
+        result = builder.describe_pending(
+            lambda image, prompt: "\u5bf9\u8c61\u8868\u9762\u53ef\u89c1\u591a\u4e2a\u5b54\u6d1e\uff0c\u5c40\u90e8\u7eb9\u7406\u4e0d\u89c4\u5219\uff0c\u8fb9\u7f18\u8f6e\u5ed3\u6e05\u695a\u3002",
+            image_root,
+            workers=2,
+        )
+        assert result == {"complete": 2}
+        assert builder.db.execute("SELECT COUNT(*) FROM labels WHERE status='complete'").fetchone()[0] == 2
     finally:
         builder.close()

@@ -73,11 +73,14 @@ def main() -> int:
     parser.add_argument("--api-model", default=DEFAULT_API_MODEL)
     parser.add_argument("--api-key-env", default="QWEN_API_KEY")
     parser.add_argument("--api-timeout", type=float, default=180.0)
+    parser.add_argument("--api-workers", type=int, default=1, help="Concurrent remote API calls; SQLite checkpoint writes remain serial.")
     parser.add_argument("--reset-descriptions", action="store_true", help="Reset only existing representative-backed records before description generation; never refreshes label selection.")
     parser.add_argument("--retry-failed", action="store_true")
     parser.add_argument("--max-attempts", type=int, default=3)
     parser.add_argument("--limit", type=int, help="Limit Qwen descriptions for a controlled run.")
     args = parser.parse_args()
+    if args.api_workers < 1:
+        parser.error("--api-workers must be positive")
 
     for label, path in (("image root", args.image_root), ("annotation root", args.annotation_root), ("image metadata index", args.image_metadata_index), ("prompt file", args.prompt_file)):
         if not path.exists():
@@ -133,6 +136,7 @@ def main() -> int:
                     retry_generator=retry_generate,
                     max_attempts=args.max_attempts,
                     limit=args.limit,
+                    workers=args.api_workers,
                 )
             finally:
                 unload()
