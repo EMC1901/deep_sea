@@ -374,6 +374,21 @@ def test_monitoring_analysis_uses_three_distinct_tag_categories() -> None:
     assert analysis.geomorphologies == (CountItem("平坦海床", 1),)
 
 
+def test_monitoring_analysis_removes_subjective_text_and_handles_empty_tags() -> None:
+    factual = _monitoring_analysis(
+        '{"description": "岩石底质上分布有海绵，场景壮观。", '
+        '"organisms": [{"name": "海绵", "count": 1}], '
+        '"substrates": [{"name": "岩石", "count": 1}], '
+        '"geomorphologies": []}'
+    )
+    empty = _monitoring_analysis(
+        '{"description": "室内环境整洁有序。", "organisms": [], "substrates": [], "geomorphologies": []}'
+    )
+
+    assert "壮观" not in factual.description
+    assert factual.description == "岩石底质上分布有海绵。"
+    assert empty.description == "画面中未确认可归类的生物、底质或地貌特征。"
+
 def test_monitoring_analysis_rejects_tags_reused_across_categories() -> None:
     with pytest.raises(ModelOutputInvalid):
         _monitoring_analysis(

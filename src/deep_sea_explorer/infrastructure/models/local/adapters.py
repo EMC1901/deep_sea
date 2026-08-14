@@ -643,7 +643,7 @@ def _monitoring_analysis(raw: str) -> MonitoringAnalysis:
         substrates = _monitoring_items(raw_substrates, "substrates")
         geomorphologies = _monitoring_items(raw_geomorphologies, "geomorphologies")
         return MonitoringAnalysis(
-            description.strip(),
+            _monitoring_description(description, organisms, substrates, geomorphologies),
             organisms,
             (),
             substrates,
@@ -651,6 +651,39 @@ def _monitoring_analysis(raw: str) -> MonitoringAnalysis:
         )
     except (TypeError, ValueError, json.JSONDecodeError) as error:
         raise ModelOutputInvalid("monitoring analysis is invalid") from error
+
+
+_PROHIBITED_MONITORING_DESCRIPTION_PHRASES = (
+    "可能",
+    "推测",
+    "似乎",
+    "估计",
+    "丰富",
+    "优美",
+    "场景壮观",
+    "壮观",
+    "整洁",
+    "有序",
+    "适合",
+    "用于",
+)
+
+
+def _monitoring_description(
+    raw_description: str,
+    organisms: tuple[CountItem, ...],
+    substrates: tuple[CountItem, ...],
+    geomorphologies: tuple[CountItem, ...],
+) -> str:
+    """Keep the public memo factual even when a model adds evaluative wording."""
+    if not organisms and not substrates and not geomorphologies:
+        return "画面中未确认可归类的生物、底质或地貌特征。"
+    description = " ".join(raw_description.split())
+    for phrase in _PROHIBITED_MONITORING_DESCRIPTION_PHRASES:
+        description = description.replace(phrase, "")
+    description = re.sub(r"[，,]\s*[。.]", "。", description)
+    description = re.sub(r"\s+", "", description).strip("，,；;。.")
+    return description + "。" if description else "画面中可见已确认的生物、底质或地貌特征。"
 
 
 _MONITORING_TAG_RULES = {
