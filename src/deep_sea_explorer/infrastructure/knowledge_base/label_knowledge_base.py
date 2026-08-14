@@ -371,6 +371,23 @@ class LabelKnowledgeBase:
         self.write_exports()
         return dict(result)
 
+    def reset_descriptions(self, backend: str) -> int:
+        """Rebuild descriptions from existing representatives without recataloging labels."""
+        if not backend.strip():
+            raise ValueError("description backend must not be empty")
+        cursor = self.db.execute(
+            """UPDATE labels
+               SET status='pending', description=NULL, raw_response=NULL, attempts=0,
+                   last_error=NULL, updated_at=?
+               WHERE representative_image IS NOT NULL""",
+            (_now(),),
+        )
+        self._set_metadata("description_backend", backend.strip())
+        self._set_metadata("description_reset_at", _now())
+        self.db.commit()
+        self.write_exports()
+        return cursor.rowcount
+
     def revalidate_completed(self) -> int:
         """Move historical outputs that violate their supplied category prompt back to failed."""
         invalid = 0
@@ -420,6 +437,8 @@ class LabelKnowledgeBase:
             "blur_threshold": self.blur_threshold,
             "candidate_sample_size": self._metadata("candidate_sample_size"),
             "random_seed": self._metadata("random_seed"),
+            "description_backend": self._metadata("description_backend"),
+            "description_reset_at": self._metadata("description_reset_at"),
             "catalog": self.catalog_counts(),
             "descriptions": dict(Counter(row["status"] for row in labels)),
             "version": self._version(labels, unclassified),

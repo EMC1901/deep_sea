@@ -19,6 +19,7 @@ from deep_sea_explorer.infrastructure.knowledge_base.label_knowledge_base import
     normalize_label,
     validate_description,
 )
+from deep_sea_explorer.infrastructure.knowledge_base.qwen_api import QwenApiError, QwenApiGenerator
 
 PROMPT_FILE = Path(__file__).parents[2] / "src/deep_sea_explorer/resources/label_description_prompts.md"
 
@@ -160,3 +161,85 @@ def test_clean_description_removes_forbidden_sentences_and_markdown() -> None:
 def test_description_validation_rejects_prompt_prohibited_language() -> None:
     assert validate_description("\u8be5\u5bf9\u8c61\u5f62\u6001\u58ee\u89c2\uff0c\u7eb9\u7406\u6e05\u6670\u3002")[1] == "description contains a prohibited evaluative phrase"
     assert validate_description("\u7531\u81ea\u7136\u5806\u79ef\u5f62\u6210\u3002", CATEGORY_GEOMORPHOLOGY)[1] == "description contains a category-prohibited inference"
+
+
+class _ApiResponse:
+    def __init__(self, payload: object) -> None:
+        self.payload = payload
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> object:
+        return self.payload
+
+
+class _ApiSession:
+    def __init__(self, response: _ApiResponse | Exception) -> None:
+        self.response = response
+        self.calls: list[dict[str, object]] = []
+
+    def post(self, endpoint: str, **kwargs: object) -> _ApiResponse:
+        self.calls.append({"endpoint": endpoint, **kwargs})
+        if isinstance(self.response, Exception):
+            raise self.response
+        return self.response
+
+
+def test_api_generator_forwards_exact_prompt_and_uses_final_message_content(tmp_path: Path) -> None:
+    image = tmp_path / "representative.jpg"
+    image.write_bytes(b"jpeg-bytes")
+    session = _ApiSession(_ApiResponse({"choices": [{"message": {"reasoning_content": "do not use", "content": "\u5bf9\u8c61\u8868\u9762\u53ef\u89c1\u591a\u4e2a\u5b54\u6d1e\uff0c\u8fb9\u7f18\u5f62\u6001\u4e0d\u89c4\u5219\uff0c\u5c40\u90e8\u7eb9\u7406\u53ef\u8fa8\u3002"}}]}))
+    generator = QwenApiGenerator("https://example.test/api/v1/", "qwen-test", "secret-value", timeout=12.0, session=session)
+
+    assert generator(image, "PROMPT-EXACT") == "\u5bf9\u8c61\u8868\u9762\u53ef\u89c1\u591a\u4e2a\u5b54\u6d1e\uff0c\u8fb9\u7f18\u5f62\u6001\u4e0d\u89c4\u5219\uff0c\u5c40\u90e8\u7eb9\u7406\u53ef\u8fa8\u3002"
+    call = session.calls[0]
+    assert call["endpoint"] == "https://example.test/api/v1/chat/completions"
+    assert call["timeout"] == 12.0
+    assert call["headers"] == {"Authorization": "Bearer secret-value", "Content-Type": "application/json"}
+    payload = call["json"]
+    assert isinstance(payload, dict)
+    assert payload["model"] == "qwen-test"
+    content = payload["messages"][0]["content"]
+    assert content[0] == {"type": "text", "text": "PROMPT-EXACT"}
+    assert content[1]["image_url"]["url"].endswith("anBlZy1ieXRlcw==")
+
+
+def test_api_generator_does_not_expose_secret_in_errors(tmp_path: Path) -> None:
+    image = tmp_path / "representative.jpg"
+    image.write_bytes(b"jpeg-bytes")
+    generator = QwenApiGenerator("https://example.test", "qwen-test", "secret-value", session=_ApiSession(RuntimeError("network unavailable")))
+
+    with pytest.raises(QwenApiError) as captured:
+        generator(image, "prompt")
+
+    assert "secret-value" not in str(captured.value)
+    assert "network unavailable" not in str(captured.value)
+
+
+def test_reset_descriptions_preserves_catalog_and_clears_old_responses(tmp_path: Path) -> None:
+    image_root = tmp_path / "images"
+    image_root.mkdir()
+    _write_image(image_root / "bio.jpg", sharp=True)
+    _write_image(image_root / "bed.jpg", sharp=True)
+    builder = LabelKnowledgeBase(tmp_path / "knowledge-base", PromptTemplates.from_file(PROMPT_FILE), blur_threshold=1.0)
+    try:
+        builder.prepare(
+            [
+                Annotation("bio.jpg", ("Biota > Sponges",), "a.json", 0),
+                Annotation("bed.jpg", ("No bedforms",), "a.json", 1),
+            ],
+            {"bio": "bio.jpg", "bed": "bed.jpg"},
+            image_root,
+        )
+        assert builder.describe_pending(lambda image, prompt: "\u5bf9\u8c61\u8868\u9762\u53ef\u89c1\u591a\u4e2a\u5b54\u6d1e\uff0c\u5c40\u90e8\u7eb9\u7406\u4e0d\u89c4\u5219\uff0c\u8fb9\u7f18\u8f6e\u5ed3\u6e05\u695a\u3002", image_root)["complete"] == 2
+        assert builder.reset_descriptions("api:qwen3-vl-235b-a22b-thinking") == 2
+        rows = builder.db.execute("SELECT canonical_label, category, description, raw_response, attempts, status FROM labels ORDER BY canonical_label").fetchall()
+        assert [tuple(row) for row in rows] == [
+            ("Biota > Sponges", CATEGORY_BIO, None, None, 0, "pending"),
+            ("No bedforms", CATEGORY_GEOMORPHOLOGY, None, None, 0, "pending"),
+        ]
+        assert builder.catalog_counts() == {CATEGORY_BIO: 1, CATEGORY_SUBSTRATE: 0, CATEGORY_GEOMORPHOLOGY: 1, "unclassified": 0}
+        assert builder._metadata("description_backend") == "api:qwen3-vl-235b-a22b-thinking"
+    finally:
+        builder.close()
