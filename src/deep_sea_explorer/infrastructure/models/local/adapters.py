@@ -317,6 +317,22 @@ class QwenAdapter(LocalAdapter):
         )
         return _capture_decision(raw)
 
+    def describe_knowledge_base_label(self, image_path: Path, prompt: str, *, retry_sample: bool = False) -> str:
+        """Describe one labelled exemplar with the caller-provided prompt verbatim."""
+        if not image_path.is_file():
+            raise InvalidModelInput("knowledge-base image does not exist")
+        if not isinstance(prompt, str) or not prompt:
+            raise InvalidModelInput("knowledge-base prompt is empty")
+        return self._generate(
+            [
+                {"type": "image", "image": self._load_rgb_image(image_path)},
+                {"type": "text", "text": prompt},
+            ],
+            max_new_tokens=512,
+            direct_response=True,
+            do_sample=retry_sample,
+        ).strip()
+
     def analyze_monitoring_frame(self, image_path: Path) -> MonitoringAnalysis:
         if not image_path.is_file():
             raise InvalidModelInput("monitoring image does not exist")
@@ -413,10 +429,15 @@ class QwenAdapter(LocalAdapter):
         *,
         max_new_tokens: int = 256,
         direct_response: bool = False,
+        do_sample: bool = False,
     ) -> str:
         _, model, processor = self.resource
         inputs = self._inputs(content, processor, direct_response=direct_response)
-        generated = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
+        generation_args: dict[str, object] = {"max_new_tokens": max_new_tokens, "do_sample": do_sample}
+        if do_sample:
+            # Low-temperature retry changes only decoding, leaving the supplied prompt untouched.
+            generation_args.update(temperature=0.2, top_p=0.9)
+        generated = model.generate(**inputs, **generation_args)
         input_length = inputs["input_ids"].shape[1]
         text = processor.batch_decode(generated[:, input_length:], skip_special_tokens=True)[0].strip()
         if not text:

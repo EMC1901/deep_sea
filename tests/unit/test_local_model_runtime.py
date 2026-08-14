@@ -65,6 +65,25 @@ def test_video_frame_reader_duplicates_a_single_frame_for_qwen(tmp_path: Path) -
     assert np.array_equal(frames[0], frames[1])
 
 
+
+def test_qwen_knowledge_base_description_passes_the_prompt_verbatim(tmp_path: Path) -> None:
+    image = tmp_path / "label.jpg"
+    image.write_bytes(b"not-decoded-in-this-unit-test")
+    adapter = QwenAdapter("/models/qwen")
+    observed: dict[str, object] = {}
+    prompt = "## 指定生物\n\n**目标生物：Biota > Sponges**"
+
+    adapter._load_rgb_image = lambda path: "image-object"  # type: ignore[method-assign]
+    adapter._generate = lambda content, **kwargs: observed.update(content=content, kwargs=kwargs) or "对象呈多孔状表面。"  # type: ignore[method-assign]
+
+    assert adapter.describe_knowledge_base_label(image, prompt) == "对象呈多孔状表面。"
+    assert observed["content"] == [{"type": "image", "image": "image-object"}, {"type": "text", "text": prompt}]
+    assert observed["kwargs"] == {"max_new_tokens": 512, "direct_response": True, "do_sample": False}
+
+    assert adapter.describe_knowledge_base_label(image, prompt, retry_sample=True) == "\u5bf9\u8c61\u5448\u591a\u5b54\u72b6\u8868\u9762\u3002"
+    assert observed["kwargs"] == {"max_new_tokens": 512, "direct_response": True, "do_sample": True}
+
+
 def test_runtime_reuses_current_model_and_unloads_before_switching() -> None:
     runtime = LocalModelRuntime(InferenceCoordinator())
     qwen, image = RecordingAdapter("qwen"), RecordingAdapter("image")
