@@ -28,7 +28,8 @@ def test_report_summary_material_removes_images_and_bounds_text() -> None:
                 "image_data_uri": "data:image/jpeg;base64," + "B" * 500_000,
             }
         ],
-        "env_stats": [{"name": f"feature-{index}", "count": 1} for index in range(500)],
+        "substrate_stats": [{"name": f"substrate-{index}", "count": 1} for index in range(500)],
+        "geomorphology_stats": [{"name": f"geomorphology-{index}", "count": 1} for index in range(500)],
     }
 
     compacted = compact_report_material(material)
@@ -37,7 +38,8 @@ def test_report_summary_material_removes_images_and_bounds_text() -> None:
     assert "data:image" not in serialized
     assert "image_data_uri" not in serialized
     assert '"image"' not in serialized
-    assert len(compacted["env_stats"]) == MAX_COLLECTION_ITEMS
+    assert len(compacted["substrate_stats"]) == MAX_COLLECTION_ITEMS
+    assert len(compacted["geomorphology_stats"]) == MAX_COLLECTION_ITEMS
     assert len(serialized) < SUMMARY_TEXT_BUDGET + 20_000
 
 

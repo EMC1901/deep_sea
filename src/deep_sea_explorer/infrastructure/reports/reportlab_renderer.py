@@ -114,9 +114,12 @@ class ReportLabRenderer:
         )
         story: list[Any] = []
         bio_samples = self._records(material.get("bio_samples"))
-        env_samples = self._records(material.get("env_samples"))
+        # Accept legacy environment payloads while rendering the current three categories.
+        substrate_samples = self._records(material.get("substrate_samples")) or self._records(material.get("env_samples"))
+        geomorphology_samples = self._records(material.get("geomorphology_samples"))
         bio_stats = self._records(material.get("bio_stats"))
-        env_stats = self._records(material.get("env_stats"))
+        substrate_stats = self._records(material.get("substrate_stats")) or self._records(material.get("env_stats"))
+        geomorphology_stats = self._records(material.get("geomorphology_stats"))
         memos = self._records(material.get("memos"))
         chats = self._records(material.get("chats"))
         raw_meta = material.get("meta")
@@ -172,14 +175,14 @@ class ReportLabRenderer:
             KeepTogether,
         )
 
-        story.append(Paragraph("三、底质与环境探测结果", heading_style))
-        story.append(self._bar_chart(env_stats, "底质/环境要素统计（Top 10）"))
+        story.append(Paragraph("三、底质探测结果", heading_style))
+        story.append(self._bar_chart(substrate_stats, "底质统计（Top 10）"))
         story.append(Spacer(1, 6))
         self._append_samples(
             story,
-            env_samples,
-            "环境样本",
-            "未捕获到典型底质或环境样本。",
+            substrate_samples,
+            "底质样本",
+            "未捕获到典型底质样本。",
             subheading_style,
             body_style,
             Image,
@@ -187,7 +190,22 @@ class ReportLabRenderer:
             KeepTogether,
         )
 
-        story.append(Paragraph("四、场景动态监测日志", heading_style))
+        story.append(Paragraph("四、地貌探测结果", heading_style))
+        story.append(self._bar_chart(geomorphology_stats, "地貌统计（Top 10）"))
+        story.append(Spacer(1, 6))
+        self._append_samples(
+            story,
+            geomorphology_samples,
+            "地貌样本",
+            "未捕获到典型地貌样本。",
+            subheading_style,
+            body_style,
+            Image,
+            Spacer,
+            KeepTogether,
+        )
+
+        story.append(Paragraph("五、场景动态监测日志", heading_style))
         if memos:
             memo_rows: list[list[Any]] = [
                 [
@@ -218,7 +236,7 @@ class ReportLabRenderer:
         else:
             story.append(self._paragraph("无场景动态监测记录。", body_style))
 
-        story.append(Paragraph("五、指挥官与系统交互记录", heading_style))
+        story.append(Paragraph("六、指挥官与系统交互记录", heading_style))
         if chats:
             chat_rows: list[list[Any]] = [
                 [
@@ -269,10 +287,22 @@ class ReportLabRenderer:
             )
         )
         story.append(Spacer(1, 10))
-        story.append(Paragraph("B. 底质/环境统计明细", subheading_style))
+        story.append(Paragraph("B. 底质统计明细", subheading_style))
         story.append(
             self._stats_table(
-                env_stats,
+                substrate_stats,
+                LongTable,
+                TableStyle,
+                colors,
+                table_header_style,
+                table_style,
+            )
+        )
+        story.append(Spacer(1, 10))
+        story.append(Paragraph("C. 地貌统计明细", subheading_style))
+        story.append(
+            self._stats_table(
+                geomorphology_stats,
                 LongTable,
                 TableStyle,
                 colors,

@@ -59,7 +59,7 @@ def test_complete_report_contains_original_sections_images_and_page_numbers() ->
                 "image": image,
             }
         ],
-        "env_samples": [
+        "substrate_samples": [
             {
                 "name": "岩石底质",
                 "time": "20:51:30",
@@ -67,8 +67,17 @@ def test_complete_report_contains_original_sections_images_and_page_numbers() ->
                 "image": image,
             }
         ],
+        "geomorphology_samples": [
+            {
+                "name": "平坦海床",
+                "time": "20:51:35",
+                "description": "岩石海床局部平坦，可见缓慢起伏。",
+                "image": image,
+            }
+        ],
         "bio_stats": [{"name": "深海鱼", "count": 1}],
-        "env_stats": [{"name": "岩石底质", "count": 1}],
+        "substrate_stats": [{"name": "岩石底质", "count": 1}],
+        "geomorphology_stats": [{"name": "平坦海床", "count": 1}],
     }
     try:
         ReportLabRenderer().render(
@@ -89,15 +98,19 @@ def test_complete_report_contains_original_sections_images_and_page_numbers() ->
             "任务会话",
             "一、智能任务总结",
             "二、生物探测结果",
-            "三、底质与环境探测结果",
-            "四、场景动态监测日志",
-            "五、指挥官与系统交互记录",
+            "三、底质探测结果",
+            "四、地貌探测结果",
+            "五、场景动态监测日志",
+            "六、指挥官与系统交互记录",
             "附录：统计明细",
+            "生物统计明细",
+            "底质统计明细",
+            "地貌统计明细",
         ):
             assert heading in text
         assert "20:50:34 - 20:52:08" in text
         assert "Page 1" in text
         # ReportLab reuses identical images as one PDF XObject on a page.
-        assert image_count >= 2
+        assert image_count >= 3
     finally:
         shutil.rmtree(root, ignore_errors=True)

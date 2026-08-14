@@ -1280,7 +1280,8 @@
         <div class="stats-group" aria-label="实时运行指标">
           <span class="stat-item">运行状态 <b id="sysStatus">待机</b></span>
           <span class="stat-item">画面帧率 <b><span id="fpsCount">0</span> FPS</b></span>
-          <span class="stat-item">缓存画面 <b><span id="bufferSize">0</span> 帧</b></span>
+          <span class="stat-item">队列1缓存 <b><span id="queue1Size">0</span> 帧</b></span>
+          <span class="stat-item">队列2缓存 <b><span id="queue2Size">0</span> 帧</b></span>
         </div>
       </div>
 
@@ -1539,6 +1540,7 @@
         framesBuffer: [],
         uploadBuffer: [],
         uploadInFlight: false,
+        queue2Waiting: 0,
         intervals: { capture: null, memo: null, push: null },
 
         // 音频状态
@@ -1574,7 +1576,8 @@
         missionStatusText: document.getElementById('missionStatusText'),
         workflowSteps: Array.from(document.querySelectorAll('[data-workflow-step]')),
         fps: document.getElementById('fpsCount'),
-        buffer: document.getElementById('bufferSize'),
+        queue1: document.getElementById('queue1Size'),
+        queue2: document.getElementById('queue2Size'),
         memoContent: document.getElementById('memoContent'),
         monitorDot: document.getElementById('monitorDot'),
         chatBox: document.getElementById('chatBox'),
@@ -1794,6 +1797,7 @@
         
         stopGlobalAudio(true);
         state.isMonitoring = false;
+        state.queue2Waiting = 0;
         state.isQAActive = false;
         updateControls(false);
         updateStats();
@@ -1818,6 +1822,8 @@
         
         state.framesBuffer = [];
         state.uploadBuffer = [];
+        state.queue2Waiting = 0;
+        updateStats();
     }
 
     function resetReportUI() {
@@ -1978,7 +1984,8 @@
     }
 
     function updateStats() {
-        dom.buffer.textContent = state.framesBuffer.length;
+        dom.queue1.textContent = state.framesBuffer.length;
+        dom.queue2.textContent = state.queue2Waiting;
         dom.fps.textContent = Math.round(1000 / CONFIG.FRAME_RATE);
     }
 
@@ -1990,9 +1997,14 @@
         const formData = new FormData();
         formData.append('video', new Blob([frame], { type: 'image/jpeg' }), 'frame.jpg');
         try {
-            await fetch(`${CONFIG.API_HOST}/videoanalyze`, {
+            const response = await fetch(`${CONFIG.API_HOST}/videoanalyze`, {
                 method: "POST", headers: { "X-Session-ID": state.sessionId }, body: formData
             });
+            if (!response.ok) throw new Error(`\u89c6\u9891\u5206\u6790\u8bf7\u6c42\u5931\u8d25: ${response.status}`);
+            const payload = await response.json();
+            const results = Array.isArray(payload.results) ? payload.results : [];
+            const latest = results.at(-1) || {};
+            state.queue2Waiting = Number(latest.queue2_waiting ?? latest.metrics?.queue2_waiting ?? 0) || 0;
         } catch (e) { console.warn(e); }
         finally {
             state.uploadInFlight = false;
