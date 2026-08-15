@@ -56,6 +56,26 @@ class FakeServerModelApi:
                 },
                 headers,
             )
+        if path == "/v1/vision/match-monitoring-tags":
+            return self._json(
+                request,
+                {
+                    "request_id": request_id,
+                    "match": {
+                        "organisms": [{"name": "Biota > Sponges", "count": 1}],
+                        "substrates": [],
+                        "geomorphologies": [],
+                        "unknown_categories": [],
+                    },
+                },
+                headers,
+            )
+        if path == "/v1/vision/describe-monitoring-frame":
+            return self._json(
+                request,
+                {"request_id": request_id, "description": "细沙底质上可见海绵。"},
+                headers,
+            )
         if path == "/v1/vision/answer":
             return httpx.Response(
                 200,
@@ -122,6 +142,13 @@ def test_remote_clients_follow_frozen_v1_contract() -> None:
     decision = vision.evaluate_frame(frame)
     assert decision.category is CaptureType.BIO
     assert decision.organisms[0].name == "虾"
+    match = vision.match_monitoring_tags(
+        frame, {"organisms": ("Biota > Sponges",), "substrates": (), "geomorphologies": ()}
+    )
+    assert match.organisms[0].name == "Biota > Sponges"
+    assert vision.describe_monitoring_frame(
+        frame, match, {"Biota > Sponges": "附着在底质上的多孔生物。"}
+    ) == "细沙底质上可见海绵。"
     assert [(event.type, event.text) for event in vision.answer("有什么？")] == [
         (StreamEventType.CHUNK, "答"),
         (StreamEventType.FINAL, ""),
@@ -136,6 +163,8 @@ def test_remote_clients_follow_frozen_v1_contract() -> None:
         "/v1/health",
         "/v1/vision/describe-video",
         "/v1/vision/evaluate-frame",
+        "/v1/vision/match-monitoring-tags",
+        "/v1/vision/describe-monitoring-frame",
         "/v1/vision/answer",
         "/v1/vision/summarize-report",
         "/v1/images/generate",
@@ -149,13 +178,15 @@ def test_remote_clients_follow_frozen_v1_contract() -> None:
     for request_id in request_ids:
         UUID(request_id)
 
-    multipart_requests = fake_api.requests[1:3]
+    multipart_requests = fake_api.requests[1:5]
     assert b'name="video"' in multipart_requests[0].content
     assert b'name="image"' in multipart_requests[1].content
-    assert json.loads(fake_api.requests[3].content) == {"question": "有什么？"}
-    assert json.loads(fake_api.requests[4].content) == {"material": {"memos": [], "chats": []}}
-    assert json.loads(fake_api.requests[6].content)["model"] == "memo"
-    assert json.loads(fake_api.requests[7].content)["model"] == "rag"
+    assert b'name="candidates"' in multipart_requests[2].content
+    assert b'name="tags"' in multipart_requests[3].content
+    assert json.loads(fake_api.requests[5].content) == {"question": "有什么？"}
+    assert json.loads(fake_api.requests[6].content) == {"material": {"memos": [], "chats": []}}
+    assert json.loads(fake_api.requests[8].content)["model"] == "memo"
+    assert json.loads(fake_api.requests[9].content)["model"] == "rag"
 
 
 def test_embedding_client_rejects_contract_mismatch() -> None:

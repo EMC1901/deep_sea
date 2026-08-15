@@ -20,6 +20,7 @@ from deep_sea_explorer.config import ModelBackend, Settings
 from deep_sea_explorer.container import build_local_container
 from deep_sea_explorer.domain.enums import StreamEventType
 from deep_sea_explorer.domain.exceptions import ModelUnavailableError, ValidationError
+from deep_sea_explorer.domain.models import CountItem, MonitoringTagMatch
 from deep_sea_explorer.infrastructure.models.local.errors import (
     InferenceQueueFull,
     InferenceTimeout,
@@ -212,6 +213,23 @@ def _register_routes(app: Flask) -> None:
             }
         )
 
+    @app.post(f"{API_PREFIX}/vision/match-monitoring-tags")
+    def match_monitoring_tags() -> Response:
+        candidates = _candidate_labels(_form_json_object("candidates"))
+        with _uploaded_file("image") as image_path:
+            match = _container().vision.match_monitoring_tags(image_path, candidates)
+        return _json_response({"match": _monitoring_match_payload(match)})
+
+    @app.post(f"{API_PREFIX}/vision/describe-monitoring-frame")
+    def describe_monitoring_frame() -> Response:
+        tags = _monitoring_tag_match(_form_json_object("tags"))
+        descriptions = _label_descriptions(_form_json_object("descriptions"))
+        with _uploaded_file("image") as image_path:
+            description = _container().vision.describe_monitoring_frame(image_path, tags, descriptions)
+        if not isinstance(description, str) or not description.strip():
+            raise ApiProblem(500, "INVALID_MODEL_OUTPUT", "monitoring description is empty")
+        return _json_response({"description": description.strip()})
+
     @app.post(f"{API_PREFIX}/vision/evaluate-survey-event")
     def evaluate_survey_event() -> Response:
         """Evaluate two JPEGs plus detector metadata; no video or embedding is involved."""
@@ -357,6 +375,93 @@ def _json_object(allowed: set[str]) -> dict[str, object]:
     if not isinstance(body, dict) or set(body) - allowed:
         raise ApiProblem(400, "INVALID_INPUT", "request body is invalid")
     return body
+
+
+def _form_json_object(field: str) -> dict[str, object]:
+    raw = request.form.get(field)
+    if not isinstance(raw, str):
+        raise ApiProblem(400, "INVALID_INPUT", f"{field} is required")
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise ApiProblem(400, "INVALID_INPUT", f"{field} must be valid JSON") from error
+    if not isinstance(value, dict):
+        raise ApiProblem(400, "INVALID_INPUT", f"{field} must be an object")
+    return value
+
+
+def _candidate_labels(value: dict[str, object]) -> dict[str, tuple[str, ...]]:
+    fields = {"organisms", "substrates", "geomorphologies"}
+    if set(value) - fields:
+        raise ApiProblem(400, "INVALID_INPUT", "candidates has unsupported fields")
+    result: dict[str, tuple[str, ...]] = {}
+    for field in fields:
+        labels = value.get(field, [])
+        if not isinstance(labels, list) or any(
+            not isinstance(label, str) or not label.strip() for label in labels
+        ):
+            raise ApiProblem(400, "INVALID_INPUT", "candidate labels must be a string array")
+        result[field] = tuple(dict.fromkeys(label.strip() for label in labels))
+    return result
+
+
+def _monitoring_tag_match(value: dict[str, object]) -> MonitoringTagMatch:
+    fields = {"organisms", "substrates", "geomorphologies", "unknown_categories"}
+    if set(value) - fields:
+        raise ApiProblem(400, "INVALID_INPUT", "tags has unsupported fields")
+
+    def items(field: str) -> tuple[CountItem, ...]:
+        raw_items = value.get(field, [])
+        if not isinstance(raw_items, list):
+            raise ApiProblem(400, "INVALID_INPUT", f"{field} must be an array")
+        parsed: list[CountItem] = []
+        for item in raw_items:
+            if not isinstance(item, dict):
+                raise ApiProblem(400, "INVALID_INPUT", f"{field} contains an invalid item")
+            name, count = item.get("name"), item.get("count", 1)
+            if (
+                not isinstance(name, str)
+                or not name.strip()
+                or isinstance(count, bool)
+                or not isinstance(count, int)
+                or count < 1
+            ):
+                raise ApiProblem(400, "INVALID_INPUT", f"{field} contains an invalid item")
+            parsed.append(CountItem(name.strip(), count))
+        return tuple(parsed)
+
+    unknown = value.get("unknown_categories", [])
+    if not isinstance(unknown, list) or any(
+        not isinstance(category, str) or category not in {"bio", "substrate", "geomorphology"}
+        for category in unknown
+    ):
+        raise ApiProblem(400, "INVALID_INPUT", "unknown_categories is invalid")
+    return MonitoringTagMatch(
+        items("organisms"), items("substrates"), items("geomorphologies"), tuple(unknown)
+    )
+
+
+def _label_descriptions(value: dict[str, object]) -> dict[str, str]:
+    if any(
+        not isinstance(label, str)
+        or not label.strip()
+        or not isinstance(description, str)
+        or not description.strip()
+        for label, description in value.items()
+    ):
+        raise ApiProblem(400, "INVALID_INPUT", "descriptions must map labels to non-empty strings")
+    return {label.strip(): description.strip() for label, description in value.items()}
+
+
+def _monitoring_match_payload(match: MonitoringTagMatch) -> dict[str, object]:
+    return {
+        "organisms": [{"name": item.name, "count": item.count} for item in match.organisms],
+        "substrates": [{"name": item.name, "count": item.count} for item in match.substrates],
+        "geomorphologies": [
+            {"name": item.name, "count": item.count} for item in match.geomorphologies
+        ],
+        "unknown_categories": list(match.unknown_categories),
+    }
 
 
 def _model_state(gateway: object) -> str:

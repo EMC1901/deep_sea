@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import logging
 import os
 import shutil
@@ -468,3 +469,47 @@ def test_model_service_monitoring_frame_returns_three_categories(monkeypatch: py
     assert {"description", "organisms", "substrates", "geomorphologies"}.issubset(response.json)
     assert response.json["substrates"][0]["name"] == "沙泥"
     assert response.json["geomorphologies"][0]["name"] == "平坦海床"
+
+
+def test_model_service_two_pass_monitoring_endpoints(monkeypatch: pytest.MonkeyPatch, fake_container: SimpleNamespace) -> None:
+    from deep_sea_explorer.domain.models import MonitoringTagMatch
+
+    seen: dict[str, object] = {}
+
+    def match(_: Path, candidates: dict[str, tuple[str, ...]]) -> MonitoringTagMatch:
+        seen["candidates"] = candidates
+        return MonitoringTagMatch(organisms=(CountItem("海绵", 1),), unknown_categories=("substrate",))
+
+    def describe(_: Path, tags: MonitoringTagMatch, descriptions: dict[str, str]) -> str:
+        seen["tags"] = tags
+        seen["descriptions"] = descriptions
+        return "沙泥底质上可见海绵。"
+
+    fake_container.vision.match_monitoring_tags = match
+    fake_container.vision.describe_monitoring_frame = describe
+    monkeypatch.setattr(service_api, "_verify_upload", lambda path, kind: None)
+    app = service_api.create_app(service_settings(), fake_container)
+    client = app.test_client()
+    candidates = {"organisms": ["海绵"], "substrates": [], "geomorphologies": []}
+    matched = client.post(
+        "/v1/vision/match-monitoring-tags",
+        headers=headers(),
+        data={"image": (io.BytesIO(b"image"), "frame.jpg"), "candidates": json.dumps(candidates)},
+    )
+    assert matched.status_code == 200
+    assert matched.json["match"]["organisms"] == [{"name": "海绵", "count": 1}]
+    assert seen["candidates"] == {"organisms": ("海绵",), "substrates": (), "geomorphologies": ()}
+
+    tags = {"organisms": [{"name": "海绵", "count": 1}], "substrates": [], "geomorphologies": [], "unknown_categories": []}
+    described = client.post(
+        "/v1/vision/describe-monitoring-frame",
+        headers=headers(),
+        data={
+            "image": (io.BytesIO(b"image"), "frame.jpg"),
+            "tags": json.dumps(tags),
+            "descriptions": json.dumps({"海绵": "附着于底质表面的多孔生物。"}),
+        },
+    )
+    assert described.status_code == 200
+    assert described.json["description"] == "沙泥底质上可见海绵。"
+    assert seen["descriptions"] == {"海绵": "附着于底质表面的多孔生物。"}
