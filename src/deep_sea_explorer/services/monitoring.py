@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from deep_sea_explorer.domain.enums import CaptureType
-from deep_sea_explorer.domain.models import Capture, Memo, MonitoringAnalysis
+from deep_sea_explorer.domain.models import Capture, CountItem, Memo, MonitoringAnalysis, MonitoringTagMatch
 from deep_sea_explorer.ports.embedding_gateway import EmbeddingGateway
 from deep_sea_explorer.ports.file_store import FileStore
 from deep_sea_explorer.ports.memo_broker import MemoBroker
@@ -21,6 +21,7 @@ from deep_sea_explorer.ports.model_gateway import VisionModelGateway
 from deep_sea_explorer.ports.session_store import SessionStore
 from deep_sea_explorer.services.capture_stats import CaptureStatsService
 from deep_sea_explorer.services.monitoring_queue import MonitoringFrame, PerSessionFrameQueue
+from deep_sea_explorer.services.monitoring_knowledge import MonitoringKnowledgeBase
 
 
 LOGGER = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ class MonitoringService:
         threshold: float,
         *,
         dino_encoder: object,
+        knowledge_base: MonitoringKnowledgeBase,
         queue_capacity: int = 10,
         blur_threshold: float = 35.0,
         similarity_threshold: float = 0.7,
@@ -52,6 +54,7 @@ class MonitoringService:
         self.stats = stats
         self.threshold = threshold
         self.dino_encoder = dino_encoder
+        self.knowledge_base = knowledge_base
         self.blur_threshold = blur_threshold
         self.similarity_threshold = similarity_threshold
         self._queue = PerSessionFrameQueue(queue_capacity, self._analyze, self._complete)
@@ -109,7 +112,47 @@ class MonitoringService:
         )
 
     def _analyze(self, frame: MonitoringFrame) -> MonitoringAnalysis:
-        return self.vision.analyze_monitoring_frame(frame.image_path)
+        matches: list[MonitoringTagMatch] = []
+        for batch in self.knowledge_base.batches():
+            candidates = {"organisms": (), "substrates": (), "geomorphologies": ()}
+            field = {"bio": "organisms", "substrate": "substrates", "geomorphology": "geomorphologies"}[batch.category]
+            candidates[field] = batch.labels
+            matches.append(self.vision.match_monitoring_tags(frame.image_path, candidates))
+        tags = self._validated_tags(matches)
+        selections = {
+            "bio": tuple(item.name for item in tags.organisms if item.name != "未知生物"),
+            "substrate": tuple(item.name for item in tags.substrates if item.name != "未知底质"),
+            "geomorphology": tuple(item.name for item in tags.geomorphologies if item.name != "未知地貌"),
+        }
+        description = self.vision.describe_monitoring_frame(
+            frame.image_path, tags, self.knowledge_base.descriptions_for(selections)
+        )
+        return MonitoringAnalysis(description, tags.organisms, (), tags.substrates, tags.geomorphologies)
+
+    def _validated_tags(self, matches: list[MonitoringTagMatch]) -> MonitoringTagMatch:
+        grouped = {
+            "bio": ("organisms", "未知生物"),
+            "substrate": ("substrates", "未知底质"),
+            "geomorphology": ("geomorphologies", "未知地貌"),
+        }
+        accepted: dict[str, tuple[CountItem, ...]] = {}
+        unknown: set[str] = set()
+        for category, (field, unknown_label) in grouped.items():
+            values: dict[str, int] = {}
+            evidence = False
+            allowed = self.knowledge_base.allowed(category)
+            for match in matches:
+                evidence = evidence or category in match.unknown_categories
+                for item in getattr(match, field):
+                    if item.name in allowed:
+                        values[item.name] = max(values.get(item.name, 0), max(1, item.count))
+            if not values and evidence:
+                values[unknown_label] = 1
+                unknown.add(category)
+            accepted[category] = tuple(CountItem(name, count) for name, count in sorted(values.items()))
+        return MonitoringTagMatch(
+            accepted["bio"], accepted["substrate"], accepted["geomorphology"], tuple(sorted(unknown))
+        )
 
     def _complete(self, frame: MonitoringFrame, analysis: MonitoringAnalysis, elapsed: float) -> None:
         state = self.sessions.get(frame.session_id)

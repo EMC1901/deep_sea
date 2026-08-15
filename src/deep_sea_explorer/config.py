@@ -59,6 +59,8 @@ class Settings:
     monitoring_blur_threshold: float = 35.0
     monitoring_similarity_threshold: float = 0.7
     monitoring_queue_capacity: int = 10
+    label_knowledge_base_dir: str = "runtime/label-knowledge-base"
+    monitoring_label_batch_size: int = 64
     image_generation_enabled: bool = True
     image_model_path: str = ""
     yolo_model_path: str = ""
@@ -143,6 +145,8 @@ class Settings:
                 env.get("MONITORING_SIMILARITY_THRESHOLD", "0.7")
             ),
             monitoring_queue_capacity=_as_int(env.get("MONITORING_QUEUE_CAPACITY"), 10),
+            label_knowledge_base_dir=env.get("LABEL_KNOWLEDGE_BASE_DIR", "runtime/label-knowledge-base"),
+            monitoring_label_batch_size=_as_int(env.get("MONITORING_LABEL_BATCH_SIZE"), 64),
             image_generation_enabled=_as_bool(env.get("IMAGE_GENERATION_ENABLED"), True),
             image_model_path=env.get("IMAGE_MODEL_PATH", ""),
             yolo_model_path=env.get("YOLO_MODEL_PATH", ""),
@@ -205,6 +209,8 @@ class Settings:
             errors.append("MONITORING_BLUR_THRESHOLD must not be negative")
         if self.monitoring_queue_capacity <= 0:
             errors.append("MONITORING_QUEUE_CAPACITY must be positive")
+        if self.monitoring_label_batch_size <= 0:
+            errors.append("MONITORING_LABEL_BATCH_SIZE must be positive")
         if self.max_content_length_mb <= 0:
             errors.append("MAX_CONTENT_LENGTH_MB must be positive")
         if self.model_max_concurrent_requests <= 0:

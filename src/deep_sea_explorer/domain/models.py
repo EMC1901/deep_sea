@@ -53,6 +53,16 @@ class MonitoringAnalysis:
 
 
 @dataclass(frozen=True, slots=True)
+class MonitoringTagMatch:
+    """Structured output of the constrained first monitoring Qwen call."""
+
+    organisms: tuple[CountItem, ...] = ()
+    substrates: tuple[CountItem, ...] = ()
+    geomorphologies: tuple[CountItem, ...] = ()
+    unknown_categories: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class RagDocumentChunk:
     content: str
     doc_id: str

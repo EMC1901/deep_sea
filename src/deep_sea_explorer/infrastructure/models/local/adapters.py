@@ -13,7 +13,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from deep_sea_explorer.domain.enums import CaptureType
-from deep_sea_explorer.domain.models import CaptureDecision, CountItem, ModelHealth, MonitoringAnalysis
+from deep_sea_explorer.domain.models import CaptureDecision, CountItem, ModelHealth, MonitoringAnalysis, MonitoringTagMatch
 from deep_sea_explorer.services.key_frame_detection import SurveyEventEvaluation
 from deep_sea_explorer.domain.report_material import compact_report_material
 
@@ -71,6 +71,19 @@ MONITORING_FRAME_PROMPT = """
 “这片海底以柔软的沙泥底质为主，分布有附着性海绵、杯状海绵、大型石珊瑚、黑珊瑚和八放珊瑚。水螅珊瑚和丛生的丝状大型藻类也分布在底质表面，局部区域可见微藻覆盖。”
 “柔软的沙泥底质上分布着石珊瑚和扇形黑色八放珊瑚，其中部分八放珊瑚具有白色脉纹。周围还分布有附着性红色钙质大型藻类、丛生的丝状藻类、直立海绵和水螅珊瑚，并可见少量鱼类活动。”
 “该区域以岩石底质为主，其间夹杂未固结的沙泥斑块。底质上分布有黄色杯状管海绵、绿色块状海绵、结壳型钙质大型红藻、丛生的丝状大型藻类、黑色八放珊瑚和块状石珊瑚，同时可见直立海绵、壳状海绵以及微藻。”
+""".strip()
+
+CONSTRAINED_TAG_MATCH_PROMPT = """
+你是深海影像标签匹配器。只依据当前图片证据，从下面给出的候选标签中精确匹配标签；不得创造、翻译、改写或输出候选表以外的标签。只输出一个 JSON 对象，不要 Markdown、推理过程或其他文字。
+结构固定为：
+{"organisms":[{"name":"候选原样标签","count":1}],"substrates":[{"name":"候选原样标签","count":1}],"geomorphologies":[{"name":"候选原样标签","count":1}],"unknown_categories":["bio"]}
+organisms 只能使用生物候选；substrates 只能使用底质候选；geomorphologies 只能使用地貌候选。每个 name 必须逐字符等于候选项。没有明确可见证据时数组为空。若图中该类别确有可见证据、但本批候选没有匹配项，在 unknown_categories 中使用 bio、substrate 或 geomorphology；没有相应证据时绝不添加未知类别。
+候选标签：
+""".strip()
+
+MONITORING_DESCRIPTION_PROMPT = """
+你是深海影像科学解译员。根据当前图片和已经后端确认的标签及标签描述，生成一至三句简体中文科学调查式客观描述。标签描述仅是识别参考：不得照抄图片中不可见的特征，也不得补充标签之外的生物、底质或地貌。只陈述当前图片可观察到的底质与地貌、生物类型、形态、数量和空间分布关系；禁止文学化表达、评价、用途判断和证据不足的推断。只输出连续描述正文，不要标题、列表、JSON 或 Markdown。
+已确认标签及知识库描述：
 """.strip()
 
 SURVEY_EVENT_PROMPT = """
@@ -333,18 +346,38 @@ class QwenAdapter(LocalAdapter):
             do_sample=retry_sample,
         ).strip()
 
-    def analyze_monitoring_frame(self, image_path: Path) -> MonitoringAnalysis:
+    def match_monitoring_tags(self, image_path: Path, candidates: dict[str, tuple[str, ...]]) -> MonitoringTagMatch:
         if not image_path.is_file():
             raise InvalidModelInput("monitoring image does not exist")
+        normalized = {
+            field: [value for value in candidates.get(field, ()) if isinstance(value, str) and value]
+            for field in ("organisms", "substrates", "geomorphologies")
+        }
         raw = self._generate(
             [
                 {"type": "image", "image": self._load_rgb_image(image_path)},
-                {"type": "text", "text": MONITORING_FRAME_PROMPT},
+                {"type": "text", "text": CONSTRAINED_TAG_MATCH_PROMPT + "\n" + json.dumps(normalized, ensure_ascii=False)},
             ],
             max_new_tokens=256,
             direct_response=True,
         )
-        return _monitoring_analysis(raw)
+        return _monitoring_tag_match(raw)
+
+    def describe_monitoring_frame(self, image_path: Path, tags: MonitoringTagMatch, descriptions: dict[str, str]) -> str:
+        if not image_path.is_file():
+            raise InvalidModelInput("monitoring image does not exist")
+        reference = {
+            "organisms": [item.name for item in tags.organisms],
+            "substrates": [item.name for item in tags.substrates],
+            "geomorphologies": [item.name for item in tags.geomorphologies],
+            "label_descriptions": descriptions,
+        }
+        raw = self._generate(
+            [{"type": "image", "image": self._load_rgb_image(image_path)}, {"type": "text", "text": MONITORING_DESCRIPTION_PROMPT + "\n" + json.dumps(reference, ensure_ascii=False)}],
+            max_new_tokens=256,
+            direct_response=True,
+        )
+        return _monitoring_description(raw, tags.organisms, tags.substrates, tags.geomorphologies)
 
     def evaluate_survey_event(self, reference_image: Path | None, current_image: Path, metadata: dict[str, object]) -> SurveyEventEvaluation:
         if not current_image.is_file():
@@ -643,6 +676,39 @@ def _capture_decision(raw: str) -> CaptureDecision:
         )
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
         raise ModelOutputInvalid("local qwen frame decision is invalid") from error
+
+
+def _monitoring_tag_match(raw: str) -> MonitoringTagMatch:
+    try:
+        start, end = raw.find("{"), raw.rfind("}")
+        if start < 0 or end <= start:
+            raise ValueError("not JSON")
+        payload = json.loads(raw[start : end + 1])
+        if not isinstance(payload, dict):
+            raise ValueError("not object")
+        unknown = payload.get("unknown_categories", [])
+        if not isinstance(unknown, list) or any(item not in {"bio", "substrate", "geomorphology"} for item in unknown):
+            raise ValueError("unknown categories invalid")
+        return MonitoringTagMatch(
+            _tag_items(payload.get("organisms", [])),
+            _tag_items(payload.get("substrates", [])),
+            _tag_items(payload.get("geomorphologies", [])),
+            tuple(dict.fromkeys(unknown)),
+        )
+    except (TypeError, ValueError, json.JSONDecodeError) as error:
+        raise ModelOutputInvalid("monitoring tag match must be valid JSON") from error
+
+
+def _tag_items(values: object) -> tuple[CountItem, ...]:
+    seen: set[str] = set()
+    result: list[CountItem] = []
+    for item in _count_items(values):
+        name = " ".join(item.name.split()).strip("，,；;。.")
+        key = name.casefold()
+        if name and key not in seen and 0 < item.count <= 1_000_000:
+            seen.add(key)
+            result.append(CountItem(name, item.count))
+    return tuple(result)
 
 
 def _monitoring_analysis(raw: str) -> MonitoringAnalysis:

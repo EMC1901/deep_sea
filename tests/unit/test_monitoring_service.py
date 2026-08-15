@@ -1,17 +1,19 @@
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from deep_sea_explorer.domain.models import CountItem, MonitoringAnalysis
+from deep_sea_explorer.domain.models import CountItem, MonitoringTagMatch
 from deep_sea_explorer.infrastructure.storage.memory_memo import MemoryMemoBroker
 from deep_sea_explorer.infrastructure.storage.memory_session import MemorySessionStore
 from deep_sea_explorer.infrastructure.storage.temp_file_store import TempFileStore
 from deep_sea_explorer.services.capture_stats import CaptureStatsService
 from deep_sea_explorer.services.monitoring import MonitoringService
+from deep_sea_explorer.services.monitoring_knowledge import MonitoringKnowledgeBase
 
 
 class Vision:
@@ -19,16 +21,18 @@ class Vision:
         self.release = release
         self.started: list[str] = []
 
-    def analyze_monitoring_frame(self, image_path: Path) -> MonitoringAnalysis:
+    def match_monitoring_tags(self, image_path: Path, candidates: dict[str, tuple[str, ...]]) -> MonitoringTagMatch:
+        return MonitoringTagMatch(
+            (CountItem("海绵", 2),) if "海绵" in candidates["organisms"] else (),
+            (CountItem("沙泥", 1),) if "沙泥" in candidates["substrates"] else (),
+            (CountItem("平坦海床", 1),) if "平坦海床" in candidates["geomorphologies"] else (),
+        )
+
+    def describe_monitoring_frame(self, image_path: Path, tags: MonitoringTagMatch, descriptions: dict[str, str]) -> str:
         self.started.append(image_path.read_bytes().decode("ascii"))
         while not self.release:
             time.sleep(0.002)
-        return MonitoringAnalysis(
-            f"画面 {self.started[-1]}",
-            organisms=(CountItem("海绵", 2),),
-            substrates=(CountItem("沙泥", 1),),
-            geomorphologies=(CountItem("平坦海床", 1),),
-        )
+        return f"画面 {self.started[-1]}"
 
 
 class Dino:
@@ -40,10 +44,17 @@ class Dino:
 
 
 def service(tmp_path: Path, vision: Vision, dino: Dino, capacity: int = 2) -> MonitoringService:
+    directory = tmp_path / "knowledge"
+    directory.mkdir()
+    directory.joinpath("label_universe.json").write_text(json.dumps({"labels": {
+        "bio": [{"canonical_label": "海绵", "description": "多孔状固着生物。"}],
+        "substrate": [{"canonical_label": "沙泥", "description": "细颗粒沉积物。"}],
+        "geomorphology": [{"canonical_label": "平坦海床", "description": "起伏较小的海底表面。"}],
+    }}), encoding="utf-8")
     return MonitoringService(
         vision, object(), MemorySessionStore(60, 5), MemoryMemoBroker(),
         TempFileStore(tmp_path, 60), CaptureStatsService(), 0.85,
-        dino_encoder=dino, queue_capacity=capacity, blur_threshold=1, similarity_threshold=0.7,
+        dino_encoder=dino, knowledge_base=MonitoringKnowledgeBase(directory), queue_capacity=capacity, blur_threshold=1, similarity_threshold=0.7,
     )
 
 
@@ -119,3 +130,29 @@ def test_monitoring_result_keeps_three_tag_categories_separate(tmp_path: Path, v
     assert not captures["substrate"].organisms and not captures["substrate"].geomorphologies
     assert [item.name for item in captures["geomorphology"].geomorphologies] == ["平坦海床"]
     assert not captures["geomorphology"].organisms and not captures["geomorphology"].substrates
+
+
+def test_monitoring_rejects_free_labels_and_uses_unknown_only_with_evidence(tmp_path: Path, valid_frame) -> None:
+    class ConstrainedVision(Vision):
+        def match_monitoring_tags(self, image_path, candidates):
+            return MonitoringTagMatch(
+                (CountItem("自由生成标签", 9),),
+                (),
+                (CountItem("海绵", 3),),
+                ("bio",),
+            )
+
+        def describe_monitoring_frame(self, image_path, tags, descriptions):
+            assert [item.name for item in tags.organisms] == ["未知生物"]
+            assert not tags.substrates and not tags.geomorphologies
+            assert descriptions == {}
+            return "画面中可见未能匹配标签的生物特征。"
+
+    vision = ConstrainedVision()
+    monitored = service(tmp_path, vision, Dino([[1, 0]]))
+    assert monitored.process_frame("s", b"one")["status"] == "queued"
+    deadline = time.time() + 1
+    while monitored.metrics("s")["qwen_completed"] != 1 and time.time() < deadline:
+        time.sleep(0.01)
+    memo = monitored.broker.drain("s")[0]
+    assert [item.name for item in memo.captures[0].organisms] == ["未知生物"]

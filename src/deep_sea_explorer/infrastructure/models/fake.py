@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from deep_sea_explorer.domain.enums import CaptureType, StreamEventType
-from deep_sea_explorer.domain.models import CaptureDecision, ModelHealth, MonitoringAnalysis, StreamEvent
+from deep_sea_explorer.domain.models import CaptureDecision, CountItem, ModelHealth, MonitoringTagMatch, StreamEvent
 from deep_sea_explorer.services.key_frame_detection import SurveyEventEvaluation
 
 
@@ -18,8 +18,11 @@ class FakeVisionGateway:
     def evaluate_frame(self, image_path: Path) -> CaptureDecision:
         return CaptureDecision(False, False, CaptureType.ENV, "")
 
-    def analyze_monitoring_frame(self, image_path: Path) -> MonitoringAnalysis:
-        return MonitoringAnalysis("固定深海监测画面描述。")
+    def match_monitoring_tags(self, image_path: Path, candidates: dict[str, tuple[str, ...]]) -> MonitoringTagMatch:
+        return MonitoringTagMatch()
+
+    def describe_monitoring_frame(self, image_path: Path, tags: MonitoringTagMatch, descriptions: dict[str, str]) -> str:
+        return "固定深海监测画面描述。"
 
     def answer(self, question: str) -> Iterator[StreamEvent]:
         yield StreamEvent(StreamEventType.CHUNK, text="固定回答")
