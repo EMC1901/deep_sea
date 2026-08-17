@@ -114,3 +114,108 @@ def test_complete_report_contains_original_sections_images_and_page_numbers() ->
         assert image_count >= 3
     finally:
         shutil.rmtree(root, ignore_errors=True)
+
+
+def test_report_localizes_canonical_labels_and_keeps_complete_sample_labels() -> None:
+    root = Path(".deep-sea-explorer-tmp") / f"report-labels-{uuid.uuid4().hex}"
+    target = root / "labels-report.pdf"
+    image_bytes = BytesIO()
+    PillowImage.new("RGB", (320, 180), (10, 60, 90)).save(image_bytes, format="JPEG")
+    image = "data:image/jpeg;base64," + base64.b64encode(image_bytes.getvalue()).decode("ascii")
+    canonical = "Biota > Ascidians > Stalked > Colonial"
+    display_name = "有柄群体型海鞘"
+    try:
+        ReportLabRenderer().render(
+            target,
+            {
+                "bio_samples": [
+                    {
+                        "name": canonical,
+                        "label": canonical,
+                        "description": "样本附着于海床表面，形态清晰可辨。",
+                        "image": image,
+                    }
+                ],
+                "bio_stats": [{"name": canonical, "count": 1}],
+            },
+            "任务总结。",
+        )
+        with fitz.open(target) as document:
+            text = "\n".join(page.get_text() for page in document)
+            image_count = sum(len(page.get_images(full=True)) for page in document)
+        assert f"标签：{display_name}" in text
+        assert display_name in text
+        assert canonical not in text
+        assert "样本附着于海床表面" in text
+        assert image_count >= 1
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_report_keeps_each_sample_metadata_and_image_distinct() -> None:
+    root = Path(".deep-sea-explorer-tmp") / f"report-sample-identity-{uuid.uuid4().hex}"
+    target = root / "sample-identity-report.pdf"
+
+    def data_uri(color: tuple[int, int, int]) -> str:
+        image_bytes = BytesIO()
+        PillowImage.new("RGB", (320, 180), color).save(image_bytes, format="JPEG", quality=95)
+        return "data:image/jpeg;base64," + base64.b64encode(image_bytes.getvalue()).decode("ascii")
+
+    samples = [
+        ("样本甲", "08:00:01", "第一条独有描述。", (240, 10, 10)),
+        ("样本乙", "08:00:02", "第二条独有描述。", (10, 240, 10)),
+        ("样本丙", "08:00:03", "第三条独有描述。", (10, 10, 240)),
+    ]
+    material = {
+        "bio_samples": [
+            {"name": name, "label": name, "time": time, "description": description, "image": data_uri(color)}
+            for name, time, description, color in samples
+        ]
+    }
+    try:
+        ReportLabRenderer().render(target, material, "任务总结。")
+        with fitz.open(target) as document:
+            text = "\n".join(page.get_text() for page in document)
+            pixels = []
+            for page in document:
+                for image in page.get_images(full=True):
+                    raw = document.extract_image(image[0])["image"]
+                    with PillowImage.open(BytesIO(raw)) as rendered:
+                        pixels.append(rendered.convert("RGB").getpixel((160, 90)))
+
+        for _name, time, description, _color in samples:
+            assert time in text
+            assert description in text
+        assert any(red > 200 and green < 40 and blue < 40 for red, green, blue in pixels)
+        assert any(green > 200 and red < 40 and blue < 40 for red, green, blue in pixels)
+        assert any(blue > 200 and red < 40 and green < 40 for red, green, blue in pixels)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+
+def test_report_keeps_tag_group_separator_readable() -> None:
+    root = Path(".deep-sea-explorer-tmp") / f"report-tag-separator-{uuid.uuid4().hex}"
+    target = root / "tag-separator-report.pdf"
+    label = "无明显海床形态 || 二维型、波纹海床 || 生物扰动型海床"
+    try:
+        ReportLabRenderer().render(
+            target,
+            {
+                "geomorphology_samples": [
+                    {
+                        "name": label,
+                        "label": label,
+                        "time": "12:34:56",
+                        "description": "该关键帧包含多个地貌标签。",
+                    }
+                ]
+            },
+            "任务总结。",
+        )
+        with fitz.open(target) as document:
+            text = "\n".join(page.get_text() for page in document)
+        assert f"标签：{label}" in text
+        assert "二维型、波纹海床" in text
+    finally:
+        shutil.rmtree(root, ignore_errors=True)

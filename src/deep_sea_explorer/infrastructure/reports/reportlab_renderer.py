@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import re
 from datetime import datetime
@@ -18,6 +19,7 @@ class ReportLabRenderer:
 
     def __init__(self, font_path: str = "") -> None:
         self.font_name = self._register_font(font_path)
+        self._label_display_names = self._load_label_display_names()
 
     def render(self, target: Path, material: dict[str, object], summary: str) -> Path:
         from reportlab.lib import colors
@@ -113,13 +115,17 @@ class ReportLabRenderer:
             author="Deep Sea Explorer",
         )
         story: list[Any] = []
-        bio_samples = self._records(material.get("bio_samples"))
+        bio_samples = self._localized_records(self._records(material.get("bio_samples")))
         # Accept legacy environment payloads while rendering the current three categories.
-        substrate_samples = self._records(material.get("substrate_samples")) or self._records(material.get("env_samples"))
-        geomorphology_samples = self._records(material.get("geomorphology_samples"))
-        bio_stats = self._records(material.get("bio_stats"))
-        substrate_stats = self._records(material.get("substrate_stats")) or self._records(material.get("env_stats"))
-        geomorphology_stats = self._records(material.get("geomorphology_stats"))
+        substrate_samples = self._localized_records(
+            self._records(material.get("substrate_samples")) or self._records(material.get("env_samples"))
+        )
+        geomorphology_samples = self._localized_records(self._records(material.get("geomorphology_samples")))
+        bio_stats = self._localized_records(self._records(material.get("bio_stats")))
+        substrate_stats = self._localized_records(
+            self._records(material.get("substrate_stats")) or self._records(material.get("env_stats"))
+        )
+        geomorphology_stats = self._localized_records(self._records(material.get("geomorphology_stats")))
         memos = self._records(material.get("memos"))
         chats = self._records(material.get("chats"))
         raw_meta = material.get("meta")
@@ -377,6 +383,36 @@ class ReportLabRenderer:
         return [item for item in value if isinstance(item, dict)]
 
     @staticmethod
+    def _load_label_display_names() -> dict[str, str]:
+        path = Path(__file__).resolve().parents[2] / "resources" / "label_chinese_names.json"
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            labels = payload["labels"]
+        except (OSError, ValueError, KeyError, TypeError):
+            LOGGER.warning("report label Chinese-name dictionary is unavailable")
+            return {}
+        if not isinstance(labels, dict):
+            return {}
+        return {
+            label: entry["chinese_name"]
+            for label, entry in labels.items()
+            if isinstance(label, str)
+            and isinstance(entry, dict)
+            and isinstance(entry.get("chinese_name"), str)
+            and entry["chinese_name"].strip()
+        }
+
+    def _localized_records(self, records: list[dict[str, object]]) -> list[dict[str, object]]:
+        result: list[dict[str, object]] = []
+        for record in records:
+            localized = dict(record)
+            raw_name = record.get("display_name") or record.get("label") or record.get("name")
+            if isinstance(raw_name, str) and raw_name.strip():
+                localized["name"] = self._label_display_names.get(raw_name.strip(), raw_name.strip())
+            result.append(localized)
+        return result
+
+    @staticmethod
     def _clean_text(value: object) -> str:
         text = "" if value is None else str(value)
         text = text.replace("\x00", "")
@@ -387,7 +423,14 @@ class ReportLabRenderer:
     def _paragraph(self, value: object, style: Any) -> Any:
         from reportlab.platypus import Paragraph
 
-        text = escape(self._clean_text(value)).replace("\n", "<br/>")
+        # DroidSansFallbackFull renders Chinese but not Latin letters or numerals.
+        # Route ASCII spans through Helvetica so times and fallback labels remain visible.
+        text = escape(self._clean_text(value))
+        text = re.sub(
+            r"[\x20-\x7e]+",
+            lambda match: f'<font name="Helvetica">{match.group(0)}</font>',
+            text,
+        ).replace("\n", "<br/>")
         return Paragraph(text or "-", style)
 
     def _append_samples(
@@ -408,8 +451,9 @@ class ReportLabRenderer:
             story.append(self._paragraph(empty_message, body_style))
             return
         for index, sample in enumerate(samples[:12], 1):
-            name = sample.get("name") or f"{default_name}{index}"
-            block: list[Any] = [self._paragraph(f"{index}. {name}", subheading_style)]
+            label = sample.get("label") or sample.get("name") or f"{default_name}{index}"
+            label = self._label_display_names.get(self._clean_text(label), self._clean_text(label))
+            block: list[Any] = [self._paragraph(f"{index}. 标签：{label}", subheading_style)]
             if sample.get("time"):
                 block.append(self._paragraph(f"时间：{sample['time']}", body_style))
             if sample.get("description"):
@@ -452,7 +496,14 @@ class ReportLabRenderer:
 
         rows = sorted(stats, key=self._count, reverse=True)[:10]
         width = 170 * mm
-        height = max(28 * mm, (18 + max(len(rows), 1) * 15))
+        label_width = 66 * mm
+        max_label_chars = 22
+        chart_rows = [
+            (self._wrap_chart_label(self._clean_text(item.get("name", "-")), max_label_chars), self._count(item))
+            for item in rows
+        ]
+        row_heights = [max(12, len(lines) * 8 + 4) for lines, _count in chart_rows]
+        height = max(28 * mm, 22 + sum(row_heights))
         chart = Drawing(width, height)
         chart.add(
             String(
@@ -476,28 +527,26 @@ class ReportLabRenderer:
                 )
             )
             return chart
-        maximum = max(self._count(item) for item in rows) or 1
-        label_width = 46 * mm
+        maximum = max(count for _lines, count in chart_rows) or 1
         bar_width = width - label_width - 14 * mm
-        top = height - 27
-        for index, item in enumerate(rows):
-            y = top - index * 15
-            name = self._clean_text(item.get("name", "-"))[:20]
-            count = self._count(item)
-            chart.add(
-                String(
-                    0,
-                    y,
-                    name,
-                    fontName=self.font_name,
-                    fontSize=8,
-                    fillColor=colors.HexColor("#172B3A"),
+        y = height - 27
+        for (lines, count), row_height in zip(chart_rows, row_heights):
+            for line_index, line in enumerate(lines):
+                chart.add(
+                    String(
+                        0,
+                        y - line_index * 8,
+                        line,
+                        fontName=self.font_name,
+                        fontSize=8,
+                        fillColor=colors.HexColor("#172B3A"),
+                    )
                 )
-            )
+            bar_y = y - (len(lines) - 1) * 4
             chart.add(
                 Rect(
                     label_width,
-                    y - 2,
+                    bar_y - 2,
                     bar_width,
                     7,
                     strokeColor=colors.HexColor("#C4D5DD"),
@@ -507,7 +556,7 @@ class ReportLabRenderer:
             chart.add(
                 Rect(
                     label_width,
-                    y - 2,
+                    bar_y - 2,
                     max(1, bar_width * count / maximum),
                     7,
                     strokeColor=None,
@@ -517,14 +566,19 @@ class ReportLabRenderer:
             chart.add(
                 String(
                     label_width + bar_width + 5,
-                    y,
+                    bar_y,
                     str(count),
                     fontName=self.font_name,
                     fontSize=8,
                     fillColor=colors.HexColor("#123B65"),
                 )
             )
+            y -= row_height
         return chart
+
+    @staticmethod
+    def _wrap_chart_label(name: str, width: int) -> list[str]:
+        return [name[index:index + width] for index in range(0, len(name), width)] or ["-"]
 
     def _stats_table(
         self,

@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 MODEL_FIELDS = {"bio": "organisms", "substrate": "substrates", "geomorphology": "geomorphologies"}
+DISPLAY_NAMES_PATH = Path(__file__).resolve().parents[1] / "resources" / "label_chinese_names.json"
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,7 +45,26 @@ class MonitoringKnowledgeBase:
         if not any(descriptions.values()):
             raise ValueError("label knowledge base has no completed descriptions")
         self._descriptions = descriptions
+        self._display_names = self._load_display_names()
         self.batch_size = batch_size
+
+    @staticmethod
+    def _load_display_names() -> dict[str, str]:
+        try:
+            payload = json.loads(DISPLAY_NAMES_PATH.read_text(encoding="utf-8"))
+            entries = payload["labels"]
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            raise ValueError("label Chinese-name dictionary is unavailable") from error
+        if not isinstance(entries, dict):
+            raise ValueError("label Chinese-name dictionary is invalid")
+        result: dict[str, str] = {}
+        for label, entry in entries.items():
+            name = entry.get("chinese_name") if isinstance(entry, dict) else None
+            if isinstance(label, str) and label.strip() and isinstance(name, str) and name.strip():
+                result[label.strip()] = name.strip()
+        if not result:
+            raise ValueError("label Chinese-name dictionary has no entries")
+        return result
 
     def batches(self) -> tuple[LabelBatch, ...]:
         result: list[LabelBatch] = []
@@ -63,3 +83,19 @@ class MonitoringKnowledgeBase:
             known = self._descriptions.get(category, {})
             result.update({label: known[label] for label in labels if label in known})
         return result
+
+    def display_name(self, category: str, label: str) -> str:
+        """Return the reviewed Chinese name, retaining reserved unknown labels as-is."""
+        if label.startswith("未知"):
+            return label
+        if label not in self._descriptions.get(category, {}):
+            return label
+        return self._display_names.get(label, label)
+
+    def missing_display_names(self) -> dict[str, tuple[str, ...]]:
+        """Expose incomplete catalog coverage so deployment validation can fail closed."""
+        return {
+            category: tuple(sorted(set(labels) - set(self._display_names)))
+            for category, labels in self._descriptions.items()
+            if set(labels) - set(self._display_names)
+        }

@@ -269,3 +269,17 @@ def test_parallel_description_generation_checkpoints_all_results(tmp_path: Path)
         assert builder.db.execute("SELECT COUNT(*) FROM labels WHERE status='complete'").fetchone()[0] == 2
     finally:
         builder.close()
+
+
+def test_chinese_display_name_dictionary_has_reviewed_examples_and_complete_entries() -> None:
+    dictionary_path = Path(__file__).parents[2] / "src/deep_sea_explorer/resources/label_chinese_names.json"
+    payload = json.loads(dictionary_path.read_text(encoding="utf-8"))
+    labels = payload["labels"]
+
+    assert len(labels) == 288
+    assert labels["Biota > Bacterial mats > Cyanobacteria"]["chinese_name"] == "蓝细菌"
+    assert labels["Biota > Ascidians > Stalked > Colonial"]["chinese_name"] == "有柄群体型海鞘"
+    assert labels["Biota > Bryozoa > Hard > Fenestrate"]["chinese_name"] == "硬质网窗状苔藓虫"
+    assert labels["Substrate > Consolidated (hard) > Boulders"]["chinese_name"] == "固结型硬质巨砾底质"
+    assert labels["Bedforms > 3D > Ripples (<10cm height)"]["chinese_name"] == "三维型波纹海床"
+    assert all(item["chinese_name"] for item in labels.values())

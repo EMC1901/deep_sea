@@ -509,7 +509,7 @@
 
     .bar-row {
         display: grid;
-        grid-template-columns: 110px 1fr 52px;
+        grid-template-columns: minmax(0, 1.7fr) minmax(120px, 2.3fr) 52px;
         gap: 10px;
         align-items: center;
         margin-bottom: 10px;
@@ -517,9 +517,11 @@
     .bar-label {
         color: #cbd5e1;
         font-size: 0.92rem;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        overflow: visible;
+        text-overflow: clip;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        line-height: 1.35;
     }
     .bar-track {
         height: 12px;
@@ -1412,7 +1414,7 @@
             </div>
 
             <div class="capture-info">
-              <h4>生物描述</h4>
+              <h4>样本描述</h4>
               <p id="bioDesc">系统正在持续监测画面中的生物活动特征...</p>
             </div>
 
@@ -1447,7 +1449,7 @@
             </div>
 
             <div class="capture-info">
-              <h4>底质描述</h4>
+              <h4>样本描述</h4>
               <p id="substrateDesc">系统正在分析海底地形与底质结构...</p>
             </div>
 
@@ -1482,7 +1484,7 @@
             </div>
 
             <div class="capture-info">
-              <h4>地貌描述</h4>
+              <h4>样本描述</h4>
               <p id="geomorphologyDesc">系统正在分析海底地形与地貌结构...</p>
             </div>
 
@@ -1649,8 +1651,18 @@
     }
     function aggregateStats(type) {
         const counter = new Map();
-        for (const item of state.gallery[type] || []) for (const tag of item.tags || []) { const name = tag && tag.name ? String(tag.name) : ''; const count = tag && typeof tag.count === 'number' ? tag.count : 1; if (name) counter.set(name, (counter.get(name) || 0) + count); }
-        return Array.from(counter.entries()).map(([name, val]) => ({ name, val })).sort((a, b) => b.val - a.val);
+        for (const item of state.gallery[type] || []) {
+            for (const tag of item.tags || []) {
+                const canonicalName = tag && tag.name ? String(tag.name) : '';
+                const displayName = tag && tag.display_name ? String(tag.display_name) : canonicalName;
+                const count = tag && typeof tag.count === 'number' ? tag.count : 1;
+                if (!canonicalName) continue;
+                const existing = counter.get(canonicalName) || { name: displayName, val: 0 };
+                existing.val += count;
+                counter.set(canonicalName, existing);
+            }
+        }
+        return Array.from(counter.values()).sort((a, b) => b.val - a.val);
     }
     function renderStats(type) {
         const rows = aggregateStats(type), ui = dom[type], maxVal = rows.length ? Math.max(...rows.map(r => r.val)) : 1; ui.statsBody.innerHTML = '';
@@ -1851,7 +1863,17 @@
     }
 
     function toSamples(type) {
-        return (state.gallery[type] || []).map(item => { const description = item.text || ''; const names = (item.tags || []).map(tag => tag.name).filter(Boolean); const detected = names.filter(name => description.includes(name)); const fallback = type === 'bio' ? '生物' : type === 'substrate' ? '底质' : '地貌'; return { name: (detected.length ? detected : names).join('和') || '典型' + fallback + '样本', image: item.img, description, time: item.time || '' }; });
+        const fallback = type === 'bio' ? '生物' : type === 'substrate' ? '底质' : '地貌';
+        return (state.gallery[type] || []).map(item => {
+            const labels = [...new Set((item.tags || [])
+                .map(tag => tag && (tag.display_name || tag.name))
+                .filter(Boolean)
+                .map(String))];
+            const label = labels.join(' || ') || '典型' + fallback + '样本';
+            // Preserve one report sample per captured frame. Expanding one frame by
+            // its tags makes the newest frame consume the report's sample limit.
+            return { name: label, label, image: item.img, description: item.text || '', time: item.time || '' };
+        });
     }
     function toStats(type) {
         return aggregateStats(type).map(r => ({ name: r.name, count: r.val }));
