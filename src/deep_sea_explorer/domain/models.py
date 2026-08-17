@@ -82,6 +82,8 @@ class StreamEvent:
 class ModelHealth:
     ready: bool
     detail: str = ""
+    text_ready: bool | None = None
+    vision_ready: bool | None = None
 
 
 @dataclass(slots=True)

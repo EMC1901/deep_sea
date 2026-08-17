@@ -25,6 +25,7 @@ from deep_sea_explorer.infrastructure.models.local.runtime import (
     InferenceCoordinator,
     LocalModelRuntime,
 )
+from deep_sea_explorer.infrastructure.models.gguf.vision import LlamaCppVisionGateway
 from deep_sea_explorer.infrastructure.models.remote.client import RemoteModelClient
 from deep_sea_explorer.infrastructure.models.remote.embedding import RemoteEmbeddingGateway
 from deep_sea_explorer.infrastructure.models.remote.image import RemoteImageGateway
@@ -204,6 +205,36 @@ def build_local_container(settings: Settings) -> ApplicationContainer:
     )
 
 
+def build_gguf_container(settings: Settings) -> ApplicationContainer:
+    """Keep embeddings/DINO local while vision inference stays in llama-server."""
+    runtime = LocalModelRuntime(
+        InferenceCoordinator(
+            settings.model_max_concurrent_requests,
+            settings.model_max_queue_size,
+            settings.model_queue_timeout_seconds,
+        )
+    )
+    return _build(
+        settings,
+        LlamaCppVisionGateway(settings),
+        DisabledImageGateway(),
+        LocalEmbeddingGateway(
+            runtime,
+            EmbeddingAdapter("gte", settings.memo_embedding_model_path, 768, trust_remote_code=True),
+        ),
+        LocalEmbeddingGateway(
+            runtime,
+            EmbeddingAdapter("minilm", settings.rag_embedding_model_path, 384, trust_remote_code=False),
+        ),
+        _build_local_image_retrieval(settings, runtime.coordinator),
+        (
+            DinoV2ImageEncoder(settings.monitoring_dino_model_path, device=settings.monitoring_dino_device)
+            if settings.monitoring_dino_model_path
+            else _UnavailableMonitoringDinoEncoder()
+        ),
+    )
+
+
 def _build_local_image_retrieval(
     settings: Settings,
     coordinator: InferenceCoordinator,
@@ -237,4 +268,6 @@ def build_container(settings: Settings) -> ApplicationContainer:
         return build_fake_container(settings)
     if settings.model_backend is ModelBackend.LOCAL:
         return build_local_container(settings)
+    if settings.model_backend is ModelBackend.GGUF:
+        return build_gguf_container(settings)
     return build_remote_container(settings)

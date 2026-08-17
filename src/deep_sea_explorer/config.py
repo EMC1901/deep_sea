@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 class ModelBackend(StrEnum):
     REMOTE = "remote"
     LOCAL = "local"
+    GGUF = "gguf"
     FAKE = "fake"
 
 
@@ -48,6 +49,13 @@ class Settings:
     model_service_verify_tls: bool = True
     qwen_model_path: str = ""
     qwen_adapter_path: str = ""
+    gguf_server_url: str = "http://127.0.0.1:19001"
+    gguf_model_path: str = ""
+    gguf_mmproj_path: str = ""
+    gguf_context_size: int = 4096
+    gguf_gpu_layers: int = 0
+    gguf_connect_timeout_seconds: int = 5
+    gguf_read_timeout_seconds: int = 180
     image_retrieval_enabled: bool = False
     image_retrieval_index_dir: str = ""
     image_retrieval_dino_model_path: str = ""
@@ -126,6 +134,13 @@ class Settings:
             model_service_verify_tls=_as_bool(env.get("MODEL_SERVICE_VERIFY_TLS"), True),
             qwen_model_path=env.get("QWEN_MODEL_PATH", ""),
             qwen_adapter_path=env.get("QWEN_ADAPTER_PATH", ""),
+            gguf_server_url=env.get("GGUF_SERVER_URL", "http://127.0.0.1:19001"),
+            gguf_model_path=env.get("GGUF_MODEL_PATH", ""),
+            gguf_mmproj_path=env.get("GGUF_MMPROJ_PATH", ""),
+            gguf_context_size=_as_int(env.get("GGUF_CONTEXT_SIZE"), 4096),
+            gguf_gpu_layers=_as_int(env.get("GGUF_GPU_LAYERS"), 0),
+            gguf_connect_timeout_seconds=_as_int(env.get("GGUF_CONNECT_TIMEOUT_SECONDS"), 5),
+            gguf_read_timeout_seconds=_as_int(env.get("GGUF_READ_TIMEOUT_SECONDS"), 180),
             image_retrieval_enabled=_as_bool(env.get("IMAGE_RETRIEVAL_ENABLED")),
             image_retrieval_index_dir=env.get("IMAGE_RETRIEVAL_INDEX_DIR", ""),
             image_retrieval_dino_model_path=env.get("IMAGE_RETRIEVAL_DINO_MODEL_PATH", ""),
@@ -194,9 +209,23 @@ class Settings:
                     errors.append(f"local mode requires {name}")
             if self.image_generation_enabled and not self.image_model_path:
                 errors.append("local mode requires IMAGE_MODEL_PATH when image generation is enabled")
+        if self.model_backend is ModelBackend.GGUF:
+            parsed = urlparse(self.gguf_server_url)
+            if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost"}:
+                errors.append("gguf mode requires a localhost HTTP GGUF_SERVER_URL")
+            for name, path in (("GGUF_MODEL_PATH", self.gguf_model_path), ("GGUF_MMPROJ_PATH", self.gguf_mmproj_path)):
+                if not path or not Path(path).is_file() or Path(path).suffix.lower() != ".gguf":
+                    errors.append(f"gguf mode requires a readable GGUF {name}")
+            if self.gguf_context_size < 1024:
+                errors.append("GGUF_CONTEXT_SIZE must be at least 1024 for vision")
+            if self.gguf_gpu_layers < 0:
+                errors.append("GGUF_GPU_LAYERS must be non-negative")
+            for name, path in (("MEMO_EMBEDDING_MODEL_PATH", self.memo_embedding_model_path), ("RAG_EMBEDDING_MODEL_PATH", self.rag_embedding_model_path)):
+                if not path:
+                    errors.append(f"gguf mode requires {name}")
         if self.image_retrieval_enabled:
-            if self.model_backend is not ModelBackend.LOCAL:
-                errors.append("image retrieval requires MODEL_BACKEND=local")
+            if self.model_backend not in {ModelBackend.LOCAL, ModelBackend.GGUF}:
+                errors.append("image retrieval requires MODEL_BACKEND=local or gguf")
             if not self.image_retrieval_index_dir:
                 errors.append("enabled image retrieval requires IMAGE_RETRIEVAL_INDEX_DIR")
             if not self.image_retrieval_dino_model_path:

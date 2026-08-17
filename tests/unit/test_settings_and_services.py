@@ -40,7 +40,7 @@ def test_settings_validate_modes_without_loading_models() -> None:
         "MODEL_MAX_EMBEDDING_TEXTS must be positive"
         in Settings(model_max_embedding_texts=0).validate_for_runtime()
     )
-    assert "image retrieval requires MODEL_BACKEND=local" in Settings(
+    assert "image retrieval requires MODEL_BACKEND=local or gguf" in Settings(
         model_backend=ModelBackend.FAKE,
         image_retrieval_enabled=True,
         image_retrieval_index_dir="/index",
