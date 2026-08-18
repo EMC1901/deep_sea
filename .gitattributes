@@ -1,0 +1,2 @@
+# Server lifecycle scripts must remain executable by Linux Bash after checkout.
+*.sh text eol=lf
