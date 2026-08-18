@@ -28,8 +28,7 @@ def test_report_summary_material_removes_images_and_bounds_text() -> None:
                 "image_data_uri": "data:image/jpeg;base64," + "B" * 500_000,
             }
         ],
-        "substrate_stats": [{"name": f"substrate-{index}", "count": 1} for index in range(500)],
-        "geomorphology_stats": [{"name": f"geomorphology-{index}", "count": 1} for index in range(500)],
+        "env_stats": [{"name": f"feature-{index}", "count": 1} for index in range(500)],
     }
 
     compacted = compact_report_material(material)
@@ -38,9 +37,30 @@ def test_report_summary_material_removes_images_and_bounds_text() -> None:
     assert "data:image" not in serialized
     assert "image_data_uri" not in serialized
     assert '"image"' not in serialized
-    assert len(compacted["substrate_stats"]) == MAX_COLLECTION_ITEMS
-    assert len(compacted["geomorphology_stats"]) == MAX_COLLECTION_ITEMS
+    assert len(compacted["env_stats"]) == MAX_COLLECTION_ITEMS
     assert len(serialized) < SUMMARY_TEXT_BUDGET + 20_000
+
+
+def test_report_summary_material_reserves_space_for_each_report_section() -> None:
+    material = {
+        "memos": [{"time": "12:00:00", "text": "监测记录" * 100} for _ in range(20)],
+        "chats": [{"role": "AI助手", "text": "问答记录" * 100} for _ in range(20)],
+        "bio_samples": [{"name": "深海鱼", "description": "生物样本" * 100} for _ in range(20)],
+        "env_samples": [{"name": "软底质", "description": "环境样本" * 100} for _ in range(20)],
+        "bio_stats": [{"name": "深海鱼", "count": 1} for _ in range(20)],
+        "env_stats": [{"name": "软底质", "count": 1} for _ in range(20)],
+        "meta": {"session_id": "mission-001", "time_range": "12:00:00 ~ 12:30:00"},
+    }
+
+    compacted = compact_report_material(material)
+    serialized = json.dumps(compacted, ensure_ascii=False)
+
+    assert all(compacted[name] for name in ("memos", "chats", "bio_samples", "env_samples"))
+    assert len(compacted["memos"]) == MAX_COLLECTION_ITEMS
+    assert len(compacted["bio_stats"]) == MAX_COLLECTION_ITEMS
+    # Even if every retained character tokenized independently, prompt and
+    # generation still fit comfortably within the deployed 4,096-token limit.
+    assert len(serialized) < 2_500
 
 
 def test_report_service_summarizes_compact_material_but_renders_original() -> None:

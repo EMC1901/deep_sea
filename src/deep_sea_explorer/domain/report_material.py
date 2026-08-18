@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 
-SUMMARY_TEXT_BUDGET = 24_000
-MAX_STRING_CHARS = 2_000
-MAX_COLLECTION_ITEMS = 200
-MAX_OBJECT_FIELDS = 100
-MAX_DEPTH = 6
+# The deployed GGUF service has a 4,096-token context.  Reserve enough space
+# for the prompt template and a 300–500 character conclusion; the source
+# material therefore needs to stay deliberately small even when a monitoring
+# session has accumulated many memo cards and samples.
+SUMMARY_TEXT_BUDGET = 1_000
+MAX_STRING_CHARS = 240
+MAX_COLLECTION_ITEMS = 6
+MAX_OBJECT_FIELDS = 12
+MAX_DEPTH = 4
 IMAGE_FIELDS = frozenset(
     {
         "image",
@@ -21,6 +25,24 @@ IMAGE_FIELDS = frozenset(
 
 _SKIP = object()
 
+_FIELD_TEXT_BUDGETS = {
+    "memos": 220,
+    "chats": 200,
+    "bio_samples": 160,
+    "env_samples": 160,
+    "bio_stats": 80,
+    "env_stats": 80,
+    "meta": 100,
+}
+_FIELD_COLLECTION_LIMITS = {
+    "memos": 6,
+    "chats": 6,
+    "bio_samples": 6,
+    "env_samples": 6,
+    "bio_stats": 6,
+    "env_stats": 6,
+}
+
 
 class _TextBudget:
     def __init__(self, remaining: int) -> None:
@@ -33,12 +55,40 @@ class _TextBudget:
 
 
 def compact_report_material(material: dict[str, object]) -> dict[str, object]:
-    """Remove image payloads and bound text before sending report material to a model."""
-    value = _compact(material, _TextBudget(SUMMARY_TEXT_BUDGET), depth=0)
-    return value if isinstance(value, dict) else {}
+    """Create a balanced, context-safe summary input without changing the PDF material."""
+    if not isinstance(material, dict):
+        return {}
+
+    remaining = _TextBudget(SUMMARY_TEXT_BUDGET)
+    result: dict[str, object] = {}
+    for index, (raw_key, item) in enumerate(material.items()):
+        if index >= MAX_OBJECT_FIELDS or remaining.remaining <= 0:
+            break
+        key = str(raw_key)[:100]
+        if key.strip().lower() in IMAGE_FIELDS:
+            continue
+        field_budget = _TextBudget(
+            min(_FIELD_TEXT_BUDGETS.get(key, 100), remaining.remaining)
+        )
+        compacted = _compact(
+            item,
+            field_budget,
+            depth=1,
+            collection_limit=_FIELD_COLLECTION_LIMITS.get(key, MAX_COLLECTION_ITEMS),
+        )
+        remaining.remaining -= field_budget.remaining
+        if compacted is not _SKIP:
+            result[key] = compacted
+    return result
 
 
-def _compact(value: object, budget: _TextBudget, *, depth: int) -> object:
+def _compact(
+    value: object,
+    budget: _TextBudget,
+    *,
+    depth: int,
+    collection_limit: int = MAX_COLLECTION_ITEMS,
+) -> object:
     if depth > MAX_DEPTH:
         return _SKIP
     if isinstance(value, dict):
@@ -49,14 +99,18 @@ def _compact(value: object, budget: _TextBudget, *, depth: int) -> object:
             key = str(raw_key)[:100]
             if key.strip().lower() in IMAGE_FIELDS:
                 continue
-            compacted = _compact(item, budget, depth=depth + 1)
+            compacted = _compact(
+                item, budget, depth=depth + 1, collection_limit=collection_limit
+            )
             if compacted is not _SKIP:
                 result[key] = compacted
         return result
     if isinstance(value, list):
         items: list[object] = []
-        for item in value[:MAX_COLLECTION_ITEMS]:
-            compacted = _compact(item, budget, depth=depth + 1)
+        for item in value[:collection_limit]:
+            compacted = _compact(
+                item, budget, depth=depth + 1, collection_limit=collection_limit
+            )
             if compacted is not _SKIP:
                 items.append(compacted)
         return items
