@@ -8,11 +8,33 @@ PROJECT_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
 RUNTIME_DIR="${PROJECT_ROOT}/runtime"
 LOG_DIR="${PROJECT_ROOT}/logs"
 APP_ENV_FILE="${DEEP_SEA_RUNTIME_ENV:-${RUNTIME_DIR}/app.env}"
+MODEL_BACKEND_OVERRIDE_ENV="${DEEP_SEA_MODEL_BACKEND_OVERRIDE_ENV:-${RUNTIME_DIR}/model-backend.env}"
 VENV_DIR="${DEEP_SEA_VENV:-${PROJECT_ROOT}/.venv}"
 PYTHON="${VENV_DIR}/bin/python"
 
 usage() {
     printf '%s\n' "Usage: $0 {start|stop|status}"
+}
+
+gguf_backend_enabled() {
+    # The optional override selects the deployed model backend without changing
+    # the preserved base runtime configuration.  Do not print sourced values.
+    [[ -r "${APP_ENV_FILE}" ]] || return 1
+    (
+        set -a
+        # shellcheck disable=SC1090
+        . "${APP_ENV_FILE}"
+        if [[ -r "${MODEL_BACKEND_OVERRIDE_ENV}" ]]; then
+            # shellcheck disable=SC1090
+            . "${MODEL_BACKEND_OVERRIDE_ENV}"
+        fi
+        set +a
+        [[ "${MODEL_BACKEND:-local}" == "gguf" ]]
+    )
+}
+
+manage_gguf_server() {
+    bash "${PROJECT_ROOT}/scripts/server/manage-gguf-server.sh" "$1"
 }
 
 assert_runtime_environment() {
@@ -211,6 +233,9 @@ show_status() {
 case "${ACTION}" in
     start)
         mkdir -p -- "${RUNTIME_DIR}" "${LOG_DIR}"
+        if gguf_backend_enabled; then
+            manage_gguf_server start
+        fi
         missing=()
         for component in api speech web; do
             case "${component}" in
@@ -244,7 +269,15 @@ case "${ACTION}" in
         stop_managed web
         stop_managed speech
         stop_managed api
+        if gguf_backend_enabled; then
+            manage_gguf_server stop
+        fi
         ;;
-    status) show_status ;;
+    status)
+        show_status
+        if gguf_backend_enabled; then
+            manage_gguf_server status
+        fi
+        ;;
     *) usage >&2; exit 2 ;;
 esac
