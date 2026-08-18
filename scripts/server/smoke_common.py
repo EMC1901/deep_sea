@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_RESULTS_DIR = Path("/projects/deep-sea-explorer/logs/s7")
+DEFAULT_RESULTS_DIR = Path(__file__).resolve().parents[2] / "logs" / "s7"
 
 
 def required_model_path(name: str) -> Path:

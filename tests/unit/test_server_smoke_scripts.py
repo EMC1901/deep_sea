@@ -26,7 +26,8 @@ def test_s7_smoke_scripts_exist_and_use_configured_model_paths() -> None:
 def test_s7_smoke_scripts_keep_results_in_the_controlled_log_directory() -> None:
     common = (SCRIPT_DIR / "smoke_common.py").read_text(encoding="utf-8")
 
-    assert "/projects/deep-sea-explorer/logs/s7" in common
+    assert 'Path(__file__).resolve().parents[2] / "logs" / "s7"' in common
+    assert "/projects/deep-sea-explorer/logs/s7" not in common
     assert "HF_HUB_OFFLINE" in common
     assert "TRANSFORMERS_OFFLINE" in common
 

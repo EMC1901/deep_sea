@@ -52,6 +52,10 @@ assert_runtime_environment() {
     set -a
     # shellcheck disable=SC1090
     . "${APP_ENV_FILE}"
+    if [[ -r "${MODEL_BACKEND_OVERRIDE_ENV}" ]]; then
+        # shellcheck disable=SC1090
+        . "${MODEL_BACKEND_OVERRIDE_ENV}"
+    fi
     set +a
     cd -- "${PROJECT_ROOT}"
     "${PYTHON}" -c 'from deep_sea_explorer.config import Settings; errors = Settings.from_env().validate_for_runtime(); raise SystemExit("; ".join(errors) if errors else 0)'
