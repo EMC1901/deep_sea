@@ -65,7 +65,7 @@ class Settings:
     monitoring_dino_model_path: str = ""
     monitoring_dino_device: str = "auto"
     monitoring_blur_threshold: float = 35.0
-    monitoring_similarity_threshold: float = 0.7
+    monitoring_similarity_threshold: float = 0.5
     monitoring_queue_capacity: int = 10
     label_knowledge_base_dir: str = "runtime/label-knowledge-base"
     monitoring_label_batch_size: int = 64
@@ -157,7 +157,7 @@ class Settings:
             ),
             monitoring_blur_threshold=float(env.get("MONITORING_BLUR_THRESHOLD", "35")),
             monitoring_similarity_threshold=float(
-                env.get("MONITORING_SIMILARITY_THRESHOLD", "0.7")
+                env.get("MONITORING_SIMILARITY_THRESHOLD", "0.5")
             ),
             monitoring_queue_capacity=_as_int(env.get("MONITORING_QUEUE_CAPACITY"), 10),
             label_knowledge_base_dir=env.get("LABEL_KNOWLEDGE_BASE_DIR", "runtime/label-knowledge-base"),

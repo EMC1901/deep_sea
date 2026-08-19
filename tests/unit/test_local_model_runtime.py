@@ -9,6 +9,7 @@ from deep_sea_explorer.config import ModelBackend, Settings
 from deep_sea_explorer.container import build_local_container
 from deep_sea_explorer.domain.models import CountItem, ModelHealth
 from deep_sea_explorer.infrastructure.models.local.adapters import (
+    MONITORING_DESCRIPTION_PROMPT,
     QwenAdapter,
     _capture_decision,
     _monitoring_analysis,
@@ -48,6 +49,19 @@ class RecordingAdapter:
 
     def health(self) -> ModelHealth:
         return ModelHealth(self.ready, "ready" if self.ready else "not_loaded")
+
+
+def test_monitoring_description_prompt_requires_scientific_two_to_four_sentence_output() -> None:
+    assert "科学解说式语言" in MONITORING_DESCRIPTION_PROMPT
+    assert "二至四句" in MONITORING_DESCRIPTION_PROMPT
+    assert "自然、连贯的客观描述" in MONITORING_DESCRIPTION_PROMPT
+    assert "不使用文学化、评价性或超出图像证据的推断性表述" in MONITORING_DESCRIPTION_PROMPT
+    for example in (
+        "这片海底以柔软的沙泥底质为主",
+        "柔软的沙泥底质上分布着石珊瑚",
+        "该区域以岩石底质为主",
+    ):
+        assert example in MONITORING_DESCRIPTION_PROMPT
 
 
 def test_video_frame_reader_duplicates_a_single_frame_for_qwen(tmp_path: Path) -> None:

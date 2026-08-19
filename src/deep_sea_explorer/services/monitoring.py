@@ -91,7 +91,7 @@ class MonitoringService:
             self._increment(session_id, "rejected_dino_error")
             LOGGER.warning("monitoring DINO filter failed session_id=%s error_type=%s", session_id, type(error).__name__)
             return self._response(session_id, "rejected_dino_error")
-        if similarity is not None and similarity >= self.similarity_threshold:
+        if similarity is not None and similarity > self.similarity_threshold:
             frame_path.unlink(missing_ok=True)
             self._increment(session_id, "rejected_similar")
             return self._response(session_id, "rejected_similar", similarity=round(similarity, 4))
@@ -158,7 +158,13 @@ class MonitoringService:
         state = self.sessions.get(frame.session_id)
         state.model_task_in_flight = False
         state.last_model_call_time = datetime.now().timestamp()
-        captures = self._captures(state, analysis, frame.image_path)
+        state.monitoring_frame_sequence += 1
+        captures = self._captures(
+            state,
+            analysis,
+            frame.image_path,
+            state.monitoring_frame_sequence,
+        )
         self.broker.publish(
             Memo(
                 datetime.now().strftime("%H:%M:%S"),
@@ -180,17 +186,38 @@ class MonitoringService:
             time.monotonic() - frame.captured_monotonic,
         )
 
-    def _captures(self, state: object, analysis: MonitoringAnalysis, image_path: Path) -> list[Capture]:
+    def _captures(
+        self,
+        state: object,
+        analysis: MonitoringAnalysis,
+        image_path: Path,
+        monitoring_frame_index: int,
+    ) -> list[Capture]:
         image = self._data_uri(image_path)
         captures: list[Capture] = []
         if analysis.organisms:
-            organisms = self.stats.update(state, CaptureType.BIO, analysis.organisms)
+            organisms = self.stats.update(
+                state,
+                CaptureType.BIO,
+                analysis.organisms,
+                monitoring_frame_index=monitoring_frame_index,
+            )
             captures.append(Capture(CaptureType.BIO, image, analysis.description, organisms=organisms))
         if analysis.substrates:
-            substrates = self.stats.update(state, CaptureType.SUBSTRATE, analysis.substrates)
+            substrates = self.stats.update(
+                state,
+                CaptureType.SUBSTRATE,
+                analysis.substrates,
+                monitoring_frame_index=monitoring_frame_index,
+            )
             captures.append(Capture(CaptureType.SUBSTRATE, image, analysis.description, substrates=substrates))
         if analysis.geomorphologies:
-            geomorphologies = self.stats.update(state, CaptureType.GEOMORPHOLOGY, analysis.geomorphologies)
+            geomorphologies = self.stats.update(
+                state,
+                CaptureType.GEOMORPHOLOGY,
+                analysis.geomorphologies,
+                monitoring_frame_index=monitoring_frame_index,
+            )
             captures.append(Capture(CaptureType.GEOMORPHOLOGY, image, analysis.description, geomorphologies=geomorphologies))
         return captures
 

@@ -62,6 +62,11 @@ def test_settings_accepts_the_server_model_temp_directory_name() -> None:
     assert settings.temp_dir.as_posix() == "/server/tmp"
 
 
+def test_monitoring_similarity_threshold_defaults_to_half_and_can_be_configured() -> None:
+    assert Settings.from_env({}).monitoring_similarity_threshold == 0.5
+    assert Settings.from_env({"MONITORING_SIMILARITY_THRESHOLD": "0.5"}).monitoring_similarity_threshold == 0.5
+
+
 def test_settings_reads_image_retrieval_configuration() -> None:
     settings = Settings.from_env(
         {
@@ -172,3 +177,20 @@ def test_capture_stats_and_chunker_keep_documented_rules() -> None:
     assert stats.update(state, CaptureType.BIO, (CountItem("未知", 9), CountItem("鱼", -1))) == ()
     assert TextChunker(10, 2).split("短文本") == []
     assert TextChunker(25, 5).split("a" * 30)
+
+
+def test_capture_stats_suppresses_matching_monitoring_labels_for_three_queue2_frames() -> None:
+    state = SessionState()
+    stats = CaptureStatsService()
+    label = (CountItem("八放珊瑚", 9),)
+
+    for frame_index in (1, 2, 3, 4, 5):
+        stats.update(
+            state,
+            CaptureType.BIO,
+            label,
+            monitoring_frame_index=frame_index,
+        )
+
+    assert state.cumulative_stats["bio"] == {"八放珊瑚": 2}
+    assert state.last_counted_label_frame["bio"] == {"八放珊瑚": 5}

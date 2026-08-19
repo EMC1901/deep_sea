@@ -43,7 +43,13 @@ class Dino:
         return np.asarray(next(self.values), dtype=np.float32)
 
 
-def service(tmp_path: Path, vision: Vision, dino: Dino, capacity: int = 2) -> MonitoringService:
+def service(
+    tmp_path: Path,
+    vision: Vision,
+    dino: Dino,
+    capacity: int = 2,
+    similarity_threshold: float = 0.5,
+) -> MonitoringService:
     directory = tmp_path / "knowledge"
     directory.mkdir()
     directory.joinpath("label_universe.json").write_text(json.dumps({"labels": {
@@ -54,7 +60,11 @@ def service(tmp_path: Path, vision: Vision, dino: Dino, capacity: int = 2) -> Mo
     return MonitoringService(
         vision, object(), MemorySessionStore(60, 5), MemoryMemoBroker(),
         TempFileStore(tmp_path, 60), CaptureStatsService(), 0.85,
-        dino_encoder=dino, knowledge_base=MonitoringKnowledgeBase(directory), queue_capacity=capacity, blur_threshold=1, similarity_threshold=0.7,
+        dino_encoder=dino,
+        knowledge_base=MonitoringKnowledgeBase(directory),
+        queue_capacity=capacity,
+        blur_threshold=1,
+        similarity_threshold=similarity_threshold,
     )
 
 
@@ -74,8 +84,28 @@ def test_first_frame_is_queued_and_similar_frame_is_rejected(tmp_path: Path, val
     response = monitored.process_frame("s", b"two")
 
     assert response["status"] == "rejected_similar"
-    assert response["similarity"] >= 0.7
+    assert response["similarity"] > 0.5
     assert response["metrics"]["rejected_similar"] == 1
+
+
+def test_dino_similarity_boundary_of_half_is_accepted(tmp_path: Path, valid_frame) -> None:
+    monitored = service(tmp_path, Vision(release=False), Dino([[1, 0], [0.5, 0]]))
+
+    assert monitored.process_frame("s", b"one")["status"] == "queued"
+    response = monitored.process_frame("s", b"two")
+
+    assert response["status"] == "queued"
+    assert response["similarity"] == 0.5
+
+
+def test_dino_similarity_above_half_is_rejected(tmp_path: Path, valid_frame) -> None:
+    monitored = service(tmp_path, Vision(release=False), Dino([[1, 0], [0.5001, 0]]))
+
+    assert monitored.process_frame("s", b"one")["status"] == "queued"
+    response = monitored.process_frame("s", b"two")
+
+    assert response["status"] == "rejected_similar"
+    assert response["similarity"] > 0.5
 
 
 def test_undecodable_and_blurry_frames_are_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -130,6 +160,47 @@ def test_monitoring_result_keeps_three_tag_categories_separate(tmp_path: Path, v
     assert not captures["substrate"].organisms and not captures["substrate"].geomorphologies
     assert [item.name for item in captures["geomorphology"].geomorphologies] == ["平坦海床"]
     assert not captures["geomorphology"].organisms and not captures["geomorphology"].substrates
+
+
+def test_monitoring_statistics_count_a_matching_label_again_only_after_three_frames(
+    tmp_path: Path, valid_frame
+) -> None:
+    vision = Vision()
+    monitored = service(
+        tmp_path,
+        vision,
+        Dino(
+            [
+                [1, 0, 0, 0, 0],
+                [0, 1, 0, 0, 0],
+                [0, 0, 1, 0, 0],
+                [0, 0, 0, 1, 0],
+                [0, 0, 0, 0, 1],
+            ]
+        ),
+        capacity=5,
+    )
+
+    for index in range(1, 6):
+        assert monitored.process_frame("s", f"frame-{index}".encode())["status"] == "queued"
+    deadline = time.time() + 2
+    while monitored.metrics("s")["qwen_completed"] != 5 and time.time() < deadline:
+        time.sleep(0.01)
+
+    memos = monitored.broker.drain("s")
+    assert len(memos) == 5
+    for capture_type, field in (
+        ("bio", "organisms"),
+        ("substrate", "substrates"),
+        ("geomorphology", "geomorphologies"),
+    ):
+        counts = [
+            getattr({capture.type.value: capture for capture in memo.captures}[capture_type], field)[0].count
+            for memo in memos
+        ]
+        # Frames 2–4 are within three queue-2 frames of counted frame 1;
+        # frame 5 is four frames later and therefore increments once.
+        assert counts == [1, 1, 1, 1, 2]
 
 
 def test_monitoring_rejects_free_labels_and_uses_unknown_only_with_evidence(tmp_path: Path, valid_frame) -> None:

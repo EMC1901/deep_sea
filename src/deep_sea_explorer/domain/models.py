@@ -95,6 +95,13 @@ class SessionState:
     cumulative_stats: dict[str, dict[str, int]] = field(
         default_factory=lambda: {"bio": {}, "env": {}, "substrate": {}, "geomorphology": {}}
     )
+    # Each completed queue-2 frame receives a monotonic per-session sequence
+    # number.  Statistics only count the same label again after more than
+    # three subsequently analysed frames.
+    monitoring_frame_sequence: int = 0
+    last_counted_label_frame: dict[str, dict[str, int]] = field(
+        default_factory=lambda: {"bio": {}, "substrate": {}, "geomorphology": {}}
+    )
     last_active_monotonic: float = 0.0
     # Event-driven monitoring state. Kept on the session so one process can resume
     # tracking immediately after a model task completes.
