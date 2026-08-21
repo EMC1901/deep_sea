@@ -1561,6 +1561,7 @@
         // 图库历史记录
         gallery: { bio: [], substrate: [], geomorphology: [] },
         pageIndex: { bio: 0, substrate: 0, geomorphology: 0 },
+        statistics: { bio: [], substrate: [], geomorphology: [] },
 
         // 当前查看面板
         activePanel: "bio"
@@ -1650,19 +1651,13 @@
         ui.pager.textContent = (index + 1) + ' / ' + list.length; ui.prev.disabled = index <= 0; ui.next.disabled = index >= list.length - 1;
     }
     function aggregateStats(type) {
-        const counter = new Map();
-        for (const item of state.gallery[type] || []) {
-            for (const tag of item.tags || []) {
-                const canonicalName = tag && tag.name ? String(tag.name) : '';
-                const displayName = tag && tag.display_name ? String(tag.display_name) : canonicalName;
-                const count = tag && typeof tag.count === 'number' ? tag.count : 1;
-                if (!canonicalName) continue;
-                const existing = counter.get(canonicalName) || { name: displayName, val: 0 };
-                existing.val += count;
-                counter.set(canonicalName, existing);
-            }
-        }
-        return Array.from(counter.values()).sort((a, b) => b.val - a.val);
+        return (state.statistics[type] || [])
+            .map(tag => ({
+                name: tag && (tag.display_name || tag.name) ? String(tag.display_name || tag.name) : '',
+                val: tag && typeof tag.count === 'number' ? tag.count : 0
+            }))
+            .filter(row => row.name && row.val > 0)
+            .sort((a, b) => b.val - a.val);
     }
     function renderStats(type) {
         const rows = aggregateStats(type), ui = dom[type], maxVal = rows.length ? Math.max(...rows.map(r => r.val)) : 1; ui.statsBody.innerHTML = '';
@@ -1694,6 +1689,12 @@
                 data.memos.forEach(memo => {
                     if (memo.session_id === state.sessionId) {
                         addMemo(memo.timestamp, memo.content);
+                        if (memo.statistics && typeof memo.statistics === 'object') {
+                            ['bio', 'substrate', 'geomorphology'].forEach(type => {
+                                if (Array.isArray(memo.statistics[type])) state.statistics[type] = memo.statistics[type];
+                            });
+                            renderStats(state.activePanel);
+                        }
                         
                         const captures = memo.captures || (memo.capture ? [memo.capture] : []);
                         captures.forEach(capture => {

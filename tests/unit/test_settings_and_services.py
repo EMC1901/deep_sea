@@ -179,18 +179,24 @@ def test_capture_stats_and_chunker_keep_documented_rules() -> None:
     assert TextChunker(25, 5).split("a" * 30)
 
 
-def test_capture_stats_suppresses_matching_monitoring_labels_for_three_queue2_frames() -> None:
+def test_capture_stats_compares_only_the_previous_monitoring_coordinates() -> None:
     state = SessionState()
     stats = CaptureStatsService()
     label = (CountItem("八放珊瑚", 9),)
+    from deep_sea_explorer.domain.models import MonitoringCoordinates
 
-    for frame_index in (1, 2, 3, 4, 5):
-        stats.update(
+    same = MonitoringCoordinates.from_text("-13.472523", "-27.161464")
+    changed = MonitoringCoordinates.from_text("-13.472480", "-27.161434")
+    for coordinates in (same, same, same, changed):
+        stats.update_monitoring_frame(
             state,
-            CaptureType.BIO,
-            label,
-            monitoring_frame_index=frame_index,
+            coordinates,
+            {
+                CaptureType.BIO: label,
+                CaptureType.SUBSTRATE: (),
+                CaptureType.GEOMORPHOLOGY: (),
+            },
         )
 
     assert state.cumulative_stats["bio"] == {"八放珊瑚": 2}
-    assert state.last_counted_label_frame["bio"] == {"八放珊瑚": 5}
+    assert state.previous_monitoring_coordinates == changed

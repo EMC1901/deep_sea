@@ -7,7 +7,7 @@ from pathlib import Path
 
 from deep_sea_explorer.domain.enums import StreamEventType
 from deep_sea_explorer.domain.exceptions import ModelUnavailableError
-from deep_sea_explorer.domain.models import CaptureDecision, ModelHealth, MonitoringTagMatch, StreamEvent
+from deep_sea_explorer.domain.models import CaptureDecision, ModelHealth, MonitoringCoordinates, MonitoringTagMatch, StreamEvent
 from deep_sea_explorer.services.key_frame_detection import SurveyEventEvaluation
 
 from .adapters import EmbeddingAdapter, ImageAdapter, QwenAdapter
@@ -27,6 +27,19 @@ class LocalVisionGateway:
 
     def evaluate_frame(self, image_path: Path) -> CaptureDecision:
         return self.runtime.invoke(self.adapter, lambda: self.adapter.evaluate_frame(image_path))
+
+    def extract_monitoring_coordinates(self, image_path: Path) -> MonitoringCoordinates | None:
+        return self.runtime.invoke(
+            self.adapter, lambda: self.adapter.extract_monitoring_coordinates(image_path)
+        )
+
+    def select_monitoring_labels(
+        self, image_path: Path, candidates: tuple[str, ...], *, stage: str, maximum: int
+    ) -> tuple[str, ...]:
+        return self.runtime.invoke(
+            self.adapter,
+            lambda: self.adapter.select_monitoring_labels(image_path, candidates, stage=stage, maximum=maximum),
+        )
 
     def match_monitoring_tags(self, image_path: Path, candidates: dict[str, tuple[str, ...]]) -> MonitoringTagMatch:
         return self.runtime.invoke(

@@ -13,7 +13,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from deep_sea_explorer.domain.enums import CaptureType
-from deep_sea_explorer.domain.models import CaptureDecision, CountItem, ModelHealth, MonitoringAnalysis, MonitoringTagMatch
+from deep_sea_explorer.domain.models import CaptureDecision, CountItem, ModelHealth, MonitoringAnalysis, MonitoringCoordinates, MonitoringTagMatch
 from deep_sea_explorer.services.key_frame_detection import SurveyEventEvaluation
 from deep_sea_explorer.domain.report_material import compact_report_material
 
@@ -73,6 +73,14 @@ MONITORING_FRAME_PROMPT = """
 “该区域以岩石底质为主，其间夹杂未固结的沙泥斑块。底质上分布有黄色杯状管海绵、绿色块状海绵、结壳型钙质大型红藻、丛生的丝状大型藻类、黑色八放珊瑚和块状石珊瑚，同时可见直立海绵、壳状海绵以及微藻。”
 """.strip()
 
+MONITORING_COORDINATES_PROMPT = """
+这是坐标OCR任务。只读取当前图片右上角叠加文字中的坐标，不要分析海底画面、时间、深度或其他文字。
+LO 后的带符号小数是经度，LA 后的带符号小数是纬度。必须保留正负号和画面可见的小数位。
+只输出一个 JSON 对象，不要 Markdown、解释或其他字段：
+{"LO":"-13.472523","LA":"-27.161464"}
+如果任一坐标无法清晰读取，输出该字段为 null。
+""".strip()
+
 CONSTRAINED_TAG_MATCH_PROMPT = """
 你是深海影像标签匹配器。只依据当前图片证据，从下面给出的候选标签中精确匹配标签；不得创造、翻译、改写或输出候选表以外的标签。只输出一个 JSON 对象，不要 Markdown、推理过程或其他文字。
 结构固定为：
@@ -81,6 +89,13 @@ organisms 只能使用生物候选；substrates 只能使用底质候选；geomo
 候选标签：
 """.strip()
 
+MONITORING_HIERARCHY_SELECTION_PROMPT = """
+你是深海影像分层标签匹配器。只依据当前图片的直接可见证据，从候选标签中原样选择符合当前层级的标签；不得创造、翻译、改写、补充候选表外的标签。若没有可靠证据，返回空数组。
+只输出一个 JSON 对象，不要 Markdown、推理过程或其他文字：
+{"labels":["候选原样标签"]}
+本次层级与最大可选数量会在候选表前说明。labels 中每个值必须逐字符等于候选项，不能重复，且不得超过最大数量。
+候选标签：
+""".strip()
 MONITORING_DESCRIPTION_PROMPT = """
 你是深海影像科学解译员。根据当前图片和已经后端确认的标签及标签描述，采用科学解说式语言，给出自然、连贯的客观描述。只陈述图片中可观察到的底质、生物类型、形态特征、数量及空间分布关系；不使用文学化、评价性或超出图像证据的推断性表述。描述长度限制为二至四句。标签描述仅是识别参考：不得照抄图片中不可见的特征，也不得补充标签之外的生物、底质或地貌。只输出连续描述正文，不要标题、列表、JSON 或 Markdown。
 
@@ -335,6 +350,37 @@ class QwenAdapter(LocalAdapter):
             ]
         )
         return _capture_decision(raw)
+
+    def extract_monitoring_coordinates(self, image_path: Path) -> MonitoringCoordinates | None:
+        if not image_path.is_file():
+            raise InvalidModelInput("monitoring image does not exist")
+        raw = self._generate(
+            [
+                {"type": "image", "image": self._load_rgb_image(image_path)},
+                {"type": "text", "text": MONITORING_COORDINATES_PROMPT},
+            ],
+            max_new_tokens=96,
+            direct_response=True,
+        )
+        return _monitoring_coordinates(raw)
+
+    def select_monitoring_labels(
+        self, image_path: Path, candidates: tuple[str, ...], *, stage: str, maximum: int
+    ) -> tuple[str, ...]:
+        if not image_path.is_file():
+            raise InvalidModelInput("monitoring image does not exist")
+        if maximum < 1:
+            raise InvalidModelInput("monitoring selection maximum must be positive")
+        choices = tuple(label for label in candidates if isinstance(label, str) and label.strip())
+        raw = self._generate(
+            [
+                {"type": "image", "image": self._load_rgb_image(image_path)},
+                {"type": "text", "text": MONITORING_HIERARCHY_SELECTION_PROMPT + f"\n当前层级：{stage}\n最大可选数量：{maximum}\n" + json.dumps(choices, ensure_ascii=False)},
+            ],
+            max_new_tokens=256,
+            direct_response=True,
+        )
+        return _monitoring_label_selection(raw, choices, maximum)
 
     def describe_knowledge_base_label(self, image_path: Path, prompt: str, *, retry_sample: bool = False) -> str:
         """Describe one labelled exemplar with the caller-provided prompt verbatim."""
@@ -704,6 +750,42 @@ def _monitoring_tag_match(raw: str) -> MonitoringTagMatch:
     except (TypeError, ValueError, json.JSONDecodeError) as error:
         raise ModelOutputInvalid("monitoring tag match must be valid JSON") from error
 
+
+def _monitoring_coordinates(raw: str) -> MonitoringCoordinates | None:
+    """Return None for an unreadable overlay so counting remains conservative."""
+    try:
+        start, end = raw.find("{"), raw.rfind("}")
+        if start < 0 or end <= start:
+            return None
+        payload = json.loads(raw[start : end + 1])
+        if not isinstance(payload, dict):
+            return None
+        longitude, latitude = payload.get("LO"), payload.get("LA")
+        if longitude is None or latitude is None:
+            return None
+        return MonitoringCoordinates.from_text(longitude, latitude)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+
+def _monitoring_label_selection(raw: str, candidates: tuple[str, ...], maximum: int) -> tuple[str, ...]:
+    try:
+        start, end = raw.find("{"), raw.rfind("}")
+        if start < 0 or end <= start:
+            raise ValueError("not JSON")
+        payload = json.loads(raw[start : end + 1])
+        values = payload.get("labels") if isinstance(payload, dict) else None
+        if not isinstance(values, list):
+            raise ValueError("labels are invalid")
+        allowed = set(candidates)
+        selected: list[str] = []
+        for value in values:
+            if isinstance(value, str) and value in allowed and value not in selected:
+                selected.append(value)
+            if len(selected) == maximum:
+                break
+        return tuple(selected)
+    except (TypeError, ValueError, json.JSONDecodeError) as error:
+        raise ModelOutputInvalid("monitoring hierarchy selection must be valid JSON") from error
 
 def _tag_items(values: object) -> tuple[CountItem, ...]:
     seen: set[str] = set()

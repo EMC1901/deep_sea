@@ -26,6 +26,10 @@ def serialize(memo, knowledge_base):
         }
 
     captures = memo.captures or ((memo.capture,) if memo.capture else ())
+    statistics = {
+        category: serialize_items(memo.statistics.get(category, ()), category)
+        for category in ("bio", "substrate", "geomorphology")
+    }
     return {
         "timestamp": memo.timestamp,
         "content": memo.content,
@@ -33,6 +37,8 @@ def serialize(memo, knowledge_base):
         # Retain the original field for clients that only understand one capture.
         "capture": serialize_capture(memo.capture) if memo.capture else None,
         "captures": [serialize_capture(capture) for capture in captures],
+        "coordinates": memo.coordinates.as_payload() if memo.coordinates else None,
+        "statistics": statistics,
     }
 
 

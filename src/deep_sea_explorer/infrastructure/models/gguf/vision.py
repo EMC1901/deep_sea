@@ -146,6 +146,15 @@ class LlamaCppVisionGateway:
     def evaluate_frame(self, image_path: Path) -> CaptureDecision:
         return _capture_decision(self._chat([self._image_part(image_path), {"type": "text", "text": FRAME_DECISION_PROMPT}]))
 
+    def select_monitoring_labels(
+        self, image_path: Path, candidates: tuple[str, ...], *, stage: str, maximum: int
+    ) -> tuple[str, ...]:
+        field = "substrates" if stage.startswith("substrate") else "organisms"
+        matched = self.match_monitoring_tags(
+            image_path,
+            {"organisms": candidates if field == "organisms" else (), "substrates": candidates if field == "substrates" else (), "geomorphologies": ()},
+        )
+        return tuple(item.name for item in getattr(matched, field) if item.name in candidates)[:maximum]
     def match_monitoring_tags(self, image_path: Path, candidates: dict[str, tuple[str, ...]]) -> MonitoringTagMatch:
         normalized = {field: [value for value in candidates.get(field, ()) if isinstance(value, str) and value] for field in ("organisms", "substrates", "geomorphologies")}
         raw = self._chat(

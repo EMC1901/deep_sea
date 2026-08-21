@@ -21,7 +21,7 @@ from deep_sea_explorer.ports.model_gateway import VisionModelGateway
 from deep_sea_explorer.ports.session_store import SessionStore
 from deep_sea_explorer.services.capture_stats import CaptureStatsService
 from deep_sea_explorer.services.monitoring_queue import MonitoringFrame, PerSessionFrameQueue
-from deep_sea_explorer.services.monitoring_knowledge import MonitoringKnowledgeBase
+from deep_sea_explorer.services.hierarchical_monitoring_knowledge import HierarchicalMonitoringKnowledgeBase
 
 
 LOGGER = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ class MonitoringService:
         threshold: float,
         *,
         dino_encoder: object,
-        knowledge_base: MonitoringKnowledgeBase,
+        knowledge_base: HierarchicalMonitoringKnowledgeBase,
         queue_capacity: int = 10,
         blur_threshold: float = 35.0,
         similarity_threshold: float = 0.7,
@@ -112,58 +112,80 @@ class MonitoringService:
         )
 
     def _analyze(self, frame: MonitoringFrame) -> MonitoringAnalysis:
-        matches: list[MonitoringTagMatch] = []
-        for batch in self.knowledge_base.batches():
-            candidates = {"organisms": (), "substrates": (), "geomorphologies": ()}
-            field = {"bio": "organisms", "substrate": "substrates", "geomorphology": "geomorphologies"}[batch.category]
-            candidates[field] = batch.labels
-            matches.append(self.vision.match_monitoring_tags(frame.image_path, candidates))
-        tags = self._validated_tags(matches)
-        selections = {
-            "bio": tuple(item.name for item in tags.organisms if item.name != "未知生物"),
-            "substrate": tuple(item.name for item in tags.substrates if item.name != "未知底质"),
-            "geomorphology": tuple(item.name for item in tags.geomorphologies if item.name != "未知地貌"),
-        }
-        description = self.vision.describe_monitoring_frame(
-            frame.image_path, tags, self.knowledge_base.descriptions_for(selections)
-        )
-        return MonitoringAnalysis(description, tags.organisms, (), tags.substrates, tags.geomorphologies)
+        coordinates = self.vision.extract_monitoring_coordinates(frame.image_path)
 
-    def _validated_tags(self, matches: list[MonitoringTagMatch]) -> MonitoringTagMatch:
-        grouped = {
-            "bio": ("organisms", "未知生物"),
-            "substrate": ("substrates", "未知底质"),
-            "geomorphology": ("geomorphologies", "未知地貌"),
-        }
-        accepted: dict[str, tuple[CountItem, ...]] = {}
-        unknown: set[str] = set()
-        for category, (field, unknown_label) in grouped.items():
-            values: dict[str, int] = {}
-            evidence = False
-            allowed = self.knowledge_base.allowed(category)
-            for match in matches:
-                evidence = evidence or category in match.unknown_categories
-                for item in getattr(match, field):
-                    if item.name in allowed:
-                        values[item.name] = max(values.get(item.name, 0), max(1, item.count))
-            if not values and evidence:
-                values[unknown_label] = 1
-                unknown.add(category)
-            accepted[category] = tuple(CountItem(name, count) for name, count in sorted(values.items()))
-        return MonitoringTagMatch(
-            accepted["bio"], accepted["substrate"], accepted["geomorphology"], tuple(sorted(unknown))
+        substrate_class = self._select(frame.image_path, self.knowledge_base.substrate_classes(), "substrate Class", 1)
+        substrate_subclass = self._select(
+            frame.image_path,
+            self.knowledge_base.substrate_subclasses(substrate_class[0]) if substrate_class else (),
+            "substrate Subclass",
+            1,
         )
+        substrate_group = self._select(
+            frame.image_path,
+            self.knowledge_base.substrate_groups(substrate_class[0], substrate_subclass[0])
+            if substrate_class and substrate_subclass
+            else (),
+            "substrate Group",
+            1,
+        )
+        substrate_path = (
+            self.knowledge_base.substrate_path(substrate_class[0], substrate_subclass[0], substrate_group[0])
+            if substrate_class and substrate_subclass and substrate_group
+            else None
+        )
+
+        biotic_classes = self._select(frame.image_path, self.knowledge_base.biotic_classes(), "biotic Class", 32)
+        biotic_subclasses = self._select(
+            frame.image_path,
+            self.knowledge_base.biotic_subclasses(biotic_classes),
+            "biotic Subclass",
+            64,
+        )
+        tags = MonitoringTagMatch(
+            organisms=tuple(CountItem(label, 1) for label in biotic_subclasses),
+            substrates=(CountItem(substrate_path.group, 1),) if substrate_path else (),
+        )
+        description = self.vision.describe_monitoring_frame(
+            frame.image_path,
+            tags,
+            self.knowledge_base.reference_for(substrate_path, biotic_classes, biotic_subclasses),
+        )
+        return MonitoringAnalysis(description, tags.organisms, (), tags.substrates, (), coordinates)
+
+    def _select(
+        self, image_path: Path, candidates: tuple[str, ...], stage: str, maximum: int
+    ) -> tuple[str, ...]:
+        if not candidates:
+            return ()
+        selected = self.vision.select_monitoring_labels(
+            image_path, candidates, stage=stage, maximum=maximum
+        )
+        allowed = set(candidates)
+        result: list[str] = []
+        for label in selected:
+            if label in allowed and label not in result:
+                result.append(label)
+            if len(result) == maximum:
+                break
+        return tuple(result)
 
     def _complete(self, frame: MonitoringFrame, analysis: MonitoringAnalysis, elapsed: float) -> None:
         state = self.sessions.get(frame.session_id)
         state.model_task_in_flight = False
         state.last_model_call_time = datetime.now().timestamp()
-        state.monitoring_frame_sequence += 1
-        captures = self._captures(
+        statistics = self.stats.update_monitoring_frame(
             state,
+            analysis.coordinates,
+            {
+                CaptureType.BIO: analysis.organisms,
+                CaptureType.SUBSTRATE: analysis.substrates,
+                CaptureType.GEOMORPHOLOGY: analysis.geomorphologies,
+            },
+        )
+        captures = self._captures(
             analysis,
             frame.image_path,
-            state.monitoring_frame_sequence,
         )
         self.broker.publish(
             Memo(
@@ -172,6 +194,8 @@ class MonitoringService:
                 frame.session_id,
                 captures[0] if captures else None,
                 tuple(captures),
+                analysis.coordinates,
+                statistics,
             )
         )
         with self._lock:
@@ -188,37 +212,17 @@ class MonitoringService:
 
     def _captures(
         self,
-        state: object,
         analysis: MonitoringAnalysis,
         image_path: Path,
-        monitoring_frame_index: int,
     ) -> list[Capture]:
         image = self._data_uri(image_path)
         captures: list[Capture] = []
         if analysis.organisms:
-            organisms = self.stats.update(
-                state,
-                CaptureType.BIO,
-                analysis.organisms,
-                monitoring_frame_index=monitoring_frame_index,
-            )
-            captures.append(Capture(CaptureType.BIO, image, analysis.description, organisms=organisms))
+            captures.append(Capture(CaptureType.BIO, image, analysis.description, organisms=analysis.organisms))
         if analysis.substrates:
-            substrates = self.stats.update(
-                state,
-                CaptureType.SUBSTRATE,
-                analysis.substrates,
-                monitoring_frame_index=monitoring_frame_index,
-            )
-            captures.append(Capture(CaptureType.SUBSTRATE, image, analysis.description, substrates=substrates))
+            captures.append(Capture(CaptureType.SUBSTRATE, image, analysis.description, substrates=analysis.substrates))
         if analysis.geomorphologies:
-            geomorphologies = self.stats.update(
-                state,
-                CaptureType.GEOMORPHOLOGY,
-                analysis.geomorphologies,
-                monitoring_frame_index=monitoring_frame_index,
-            )
-            captures.append(Capture(CaptureType.GEOMORPHOLOGY, image, analysis.description, geomorphologies=geomorphologies))
+            captures.append(Capture(CaptureType.GEOMORPHOLOGY, image, analysis.description, geomorphologies=analysis.geomorphologies))
         return captures
 
     @staticmethod

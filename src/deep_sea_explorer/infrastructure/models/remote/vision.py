@@ -98,6 +98,15 @@ class RemoteVisionGateway:
             items(body.get("geomorphologies")),
         )
 
+    def select_monitoring_labels(
+        self, image_path: Path, candidates: tuple[str, ...], *, stage: str, maximum: int
+    ) -> tuple[str, ...]:
+        field = "substrates" if stage.startswith("substrate") else "organisms"
+        matched = self.match_monitoring_tags(
+            image_path,
+            {"organisms": candidates if field == "organisms" else (), "substrates": candidates if field == "substrates" else (), "geomorphologies": ()},
+        )
+        return tuple(item.name for item in getattr(matched, field) if item.name in candidates)[:maximum]
     def match_monitoring_tags(
         self, image_path: Path, candidates: dict[str, tuple[str, ...]]
     ) -> MonitoringTagMatch:

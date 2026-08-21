@@ -11,7 +11,7 @@ from flask import Response
 from deep_sea_explorer.api.app_factory import create_app
 from deep_sea_explorer.config import ModelBackend, Settings
 from deep_sea_explorer.container import build_fake_container
-from deep_sea_explorer.domain.models import Memo
+from deep_sea_explorer.domain.models import CountItem, Memo, MonitoringCoordinates
 
 
 @pytest.fixture
@@ -130,3 +130,22 @@ def test_report_file_is_removed_only_after_the_response_closes(
     target.unlink.assert_not_called()
     response.close()
     target.unlink.assert_called_once_with(missing_ok=True)
+
+def test_memos_expose_recognized_labels_separately_from_cumulative_statistics(client) -> None:
+    container = client.application.extensions["container"]
+    container.memos.publish(
+        Memo(
+            "12:00:00",
+            "识别到海绵。",
+            "monitoring",
+            coordinates=MonitoringCoordinates.from_text("-13.472523", "-27.161464"),
+            statistics={
+                "bio": (CountItem("海绵", 2),),
+                "substrate": (CountItem("沙泥", 1),),
+                "geomorphology": (),
+            },
+        )
+    )
+    memo = client.get("/memos", headers={"X-Session-ID": "monitoring"}).get_json()["memos"][0]
+    assert memo["coordinates"] == {"LO": "-13.472523", "LA": "-27.161464"}
+    assert memo["statistics"]["bio"] == [{"name": "海绵", "count": 2, "display_name": "海绵"}]

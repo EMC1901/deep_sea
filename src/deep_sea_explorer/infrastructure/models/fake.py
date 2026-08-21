@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from deep_sea_explorer.domain.enums import CaptureType, StreamEventType
-from deep_sea_explorer.domain.models import CaptureDecision, CountItem, ModelHealth, MonitoringTagMatch, StreamEvent
+from deep_sea_explorer.domain.models import CaptureDecision, CountItem, ModelHealth, MonitoringCoordinates, MonitoringTagMatch, StreamEvent
 from deep_sea_explorer.services.key_frame_detection import SurveyEventEvaluation
 
 
@@ -17,6 +17,14 @@ class FakeVisionGateway:
 
     def evaluate_frame(self, image_path: Path) -> CaptureDecision:
         return CaptureDecision(False, False, CaptureType.ENV, "")
+
+    def extract_monitoring_coordinates(self, image_path: Path) -> MonitoringCoordinates | None:
+        return None
+
+    def select_monitoring_labels(
+        self, image_path: Path, candidates: tuple[str, ...], *, stage: str, maximum: int
+    ) -> tuple[str, ...]:
+        return ()
 
     def match_monitoring_tags(self, image_path: Path, candidates: dict[str, tuple[str, ...]]) -> MonitoringTagMatch:
         return MonitoringTagMatch()

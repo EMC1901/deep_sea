@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
+import re
 
 from .enums import CaptureType, StreamEventType
 
@@ -9,6 +11,40 @@ from .enums import CaptureType, StreamEventType
 class CountItem:
     name: str
     count: int = 1
+
+
+_COORDINATE_RE = re.compile(r"^[+-]\d{1,3}\.\d{1,8}$")
+
+
+@dataclass(frozen=True, slots=True)
+class MonitoringCoordinates:
+    """Validated geographic coordinates read from a monitoring-image overlay."""
+
+    longitude: Decimal
+    latitude: Decimal
+
+    @classmethod
+    def from_text(cls, longitude: object, latitude: object) -> "MonitoringCoordinates":
+        if not isinstance(longitude, str) or not isinstance(latitude, str):
+            raise ValueError("monitoring coordinates must be strings")
+        longitude, latitude = longitude.strip(), latitude.strip()
+        if not _COORDINATE_RE.fullmatch(longitude) or not _COORDINATE_RE.fullmatch(latitude):
+            raise ValueError("monitoring coordinates must be signed decimals with 1 to 8 decimal places")
+        try:
+            parsed_longitude = Decimal(longitude)
+            parsed_latitude = Decimal(latitude)
+        except InvalidOperation as error:
+            raise ValueError("monitoring coordinates are invalid decimals") from error
+        if not parsed_longitude.is_finite() or not parsed_latitude.is_finite():
+            raise ValueError("monitoring coordinates must be finite")
+        if not Decimal("-180") <= parsed_longitude <= Decimal("180"):
+            raise ValueError("longitude is outside the geographic range")
+        if not Decimal("-90") <= parsed_latitude <= Decimal("90"):
+            raise ValueError("latitude is outside the geographic range")
+        return cls(parsed_longitude, parsed_latitude)
+
+    def as_payload(self) -> dict[str, str]:
+        return {"LO": format(self.longitude, "f"), "LA": format(self.latitude, "f")}
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +75,8 @@ class Memo:
     session_id: str
     capture: Capture | None = None
     captures: tuple[Capture, ...] = ()
+    coordinates: MonitoringCoordinates | None = None
+    statistics: dict[str, tuple[CountItem, ...]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +88,7 @@ class MonitoringAnalysis:
     env_features: tuple[CountItem, ...] = ()
     substrates: tuple[CountItem, ...] = ()
     geomorphologies: tuple[CountItem, ...] = ()
+    coordinates: MonitoringCoordinates | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,12 +134,11 @@ class SessionState:
     cumulative_stats: dict[str, dict[str, int]] = field(
         default_factory=lambda: {"bio": {}, "env": {}, "substrate": {}, "geomorphology": {}}
     )
-    # Each completed queue-2 frame receives a monotonic per-session sequence
-    # number.  Statistics only count the same label again after more than
-    # three subsequently analysed frames.
-    monitoring_frame_sequence: int = 0
-    last_counted_label_frame: dict[str, dict[str, int]] = field(
-        default_factory=lambda: {"bio": {}, "substrate": {}, "geomorphology": {}}
+    # Each completed queue-2 image compares against this per-session snapshot
+    # only, then replaces it regardless of whether counts changed.
+    previous_monitoring_coordinates: MonitoringCoordinates | None = None
+    previous_monitoring_labels: dict[str, frozenset[str]] = field(
+        default_factory=lambda: {"bio": frozenset(), "substrate": frozenset(), "geomorphology": frozenset()}
     )
     last_active_monotonic: float = 0.0
     # Event-driven monitoring state. Kept on the session so one process can resume

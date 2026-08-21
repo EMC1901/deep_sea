@@ -48,7 +48,7 @@ from deep_sea_explorer.ports.image_retrieval import ImageRetrievalGateway
 from deep_sea_explorer.ports.model_gateway import ImageGenerationGateway, VisionModelGateway
 from deep_sea_explorer.services.capture_stats import CaptureStatsService
 from deep_sea_explorer.services.monitoring import MonitoringService
-from deep_sea_explorer.services.monitoring_knowledge import MonitoringKnowledgeBase
+from deep_sea_explorer.services.hierarchical_monitoring_knowledge import HierarchicalMonitoringKnowledgeBase
 from deep_sea_explorer.services.question_answering import QuestionAnsweringService
 from deep_sea_explorer.services.rag_service import RagService
 from deep_sea_explorer.services.report_service import ReportService
@@ -113,9 +113,7 @@ def _build(
     monitoring = MonitoringService(
         vision, memo_embedding, sessions, memos, files, stats, settings.memo_similarity_threshold,
         dino_encoder=dino_encoder,
-        knowledge_base=MonitoringKnowledgeBase(
-            Path(settings.label_knowledge_base_dir), batch_size=settings.monitoring_label_batch_size
-        ),
+        knowledge_base=HierarchicalMonitoringKnowledgeBase(Path(settings.label_knowledge_base_dir)),
         queue_capacity=settings.monitoring_queue_capacity,
         blur_threshold=settings.monitoring_blur_threshold,
         similarity_threshold=settings.monitoring_similarity_threshold,
