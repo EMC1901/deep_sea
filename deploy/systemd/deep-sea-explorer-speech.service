@@ -1,0 +1,24 @@
+[Unit]
+Description=Deep Sea Explorer speech API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__SERVICE_USER__
+Group=__SERVICE_GROUP__
+WorkingDirectory=/opt/deep-sea-explorer
+EnvironmentFile=/etc/deep-sea-explorer/app.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/deep-sea-explorer/deploy/run-speech.sh
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/deep-sea-explorer
+
+[Install]
+WantedBy=multi-user.target

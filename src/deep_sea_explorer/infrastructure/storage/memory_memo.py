@@ -22,9 +22,9 @@ class MemoryMemoBroker:
     def drain(self, session_id: str | None = None) -> list[Memo]:
         with self._lock:
             if session_id is not None:
-                items = list(self._queues.pop(session_id, ()))
-                return items
-            items: list[Memo] = []
+                session_items = list(self._queues.pop(session_id, ()))
+                return session_items
+            all_items: list[Memo] = []
             for sid in list(self._queues):
-                items.extend(self._queues.pop(sid))
-            return items
+                all_items.extend(self._queues.pop(sid))
+            return all_items

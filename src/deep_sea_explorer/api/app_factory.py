@@ -29,3 +29,14 @@ def create_app(settings: Settings | None = None, container: object | None = None
     for blueprint in (health.bp, video.bp, memos.bp, rag.bp, reports.bp):
         app.register_blueprint(blueprint)
     return app
+
+
+def start_background_services(app: Flask) -> None:
+    """Start background processing only in a serving process, never during app creation."""
+    worker = app.extensions["container"].worker
+    worker.start()
+
+
+def stop_background_services(app: Flask) -> None:
+    worker = app.extensions["container"].worker
+    worker.stop()

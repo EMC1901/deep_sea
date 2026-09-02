@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 from flask import Response
@@ -10,7 +11,7 @@ from flask import Response
 from deep_sea_explorer.api.app_factory import create_app
 from deep_sea_explorer.config import ModelBackend, Settings
 from deep_sea_explorer.container import build_fake_container
-from deep_sea_explorer.domain.models import Memo
+from deep_sea_explorer.domain.models import CountItem, Memo, MonitoringCoordinates
 
 
 @pytest.fixture
@@ -47,27 +48,36 @@ def test_health_keeps_current_top_level_fields(client) -> None:
     assert body["model"] == "loaded"
     assert body["rag"] == "no_documents"
     assert body["documents"] == 0
+    assert body["image_retrieval"] == {
+        "enabled": False,
+        "ready": False,
+        "detail": "image retrieval is disabled",
+        "index_size": 0,
+        "embedding_dimension": 0,
+    }
 
 
-def test_video_analyze_returns_saved_status_and_ndjson(client) -> None:
-    saved = client.post(
-        "/videoanalyze",
-        data={"video": (io.BytesIO(b"invalid"), "frame.jpg")},
-        content_type="multipart/form-data",
-    )
-    assert saved.status_code == 400
-    # The video path is injected to avoid OpenCV and filesystem dependence in API contract tests.
-    app = client.application
-    app.extensions["container"].sessions.get("contract").latest_video = "fake.mp4"
+def test_video_analyze_streams_text_only_questions(client) -> None:
     response = client.post(
         "/videoanalyze",
-        data={"question": "视频里有什么？"},
+        json={"question": "你好，介绍一下你自己。"},
         headers={"X-Session-ID": "contract"},
-        content_type="multipart/form-data",
     )
     events = [json.loads(line) for line in response.get_data(as_text=True).splitlines()]
     assert response.mimetype == "application/x-ndjson"
     assert events[-1] == {"type": "final", "text": "固定回答"}
+
+
+def test_video_analyze_rejects_question_frame_uploads(client) -> None:
+    response = client.post(
+        "/videoanalyze",
+        data={"question": "你好", "video": (io.BytesIO(b"frame"), "frame.jpg")},
+        headers={"X-Session-ID": "contract"},
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "questions accept text only"
 
 
 def test_memos_are_session_isolated(client) -> None:
@@ -98,3 +108,44 @@ def test_rag_validation_and_report_download_contract(client) -> None:
     assert report.status_code == 200
     assert report.mimetype == "application/pdf"
     assert "attachment" in report.headers["Content-Disposition"]
+
+
+def test_report_file_is_removed_only_after_the_response_closes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = Mock()
+    settings = Settings(model_backend=ModelBackend.FAKE)
+    container = build_fake_container(settings)
+    monkeypatch.setattr(container.reports, "generate", lambda _: target)
+    import deep_sea_explorer.api.routes.reports as reports_route
+
+    monkeypatch.setattr(
+        reports_route,
+        "send_file",
+        lambda *args, **kwargs: Response(b"%PDF-1.4\n", mimetype="application/pdf"),
+    )
+    app = create_app(settings, container)
+    response = app.test_client().post("/generate_report", json={})
+
+    target.unlink.assert_not_called()
+    response.close()
+    target.unlink.assert_called_once_with(missing_ok=True)
+
+def test_memos_expose_recognized_labels_separately_from_cumulative_statistics(client) -> None:
+    container = client.application.extensions["container"]
+    container.memos.publish(
+        Memo(
+            "12:00:00",
+            "识别到海绵。",
+            "monitoring",
+            coordinates=MonitoringCoordinates.from_text("-13.472523", "-27.161464"),
+            statistics={
+                "bio": (CountItem("海绵", 2),),
+                "substrate": (CountItem("沙泥", 1),),
+                "geomorphology": (),
+            },
+        )
+    )
+    memo = client.get("/memos", headers={"X-Session-ID": "monitoring"}).get_json()["memos"][0]
+    assert memo["coordinates"] == {"LO": "-13.472523", "LA": "-27.161464"}
+    assert memo["statistics"]["bio"] == [{"name": "海绵", "count": 2, "display_name": "海绵"}]

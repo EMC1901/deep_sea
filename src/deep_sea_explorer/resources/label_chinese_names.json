@@ -1,0 +1,1158 @@
+{
+  "description": "CATAMI standard labels mapped to fixed Chinese display names for monitoring output.",
+  "labels": {
+    "Bedforms > 2D > Ripples (<10cm height)": {
+      "category": "geomorphology",
+      "chinese_name": "二维型、波纹海床"
+    },
+    "Bedforms > 2D > Waves ( > 10cm height)": {
+      "category": "geomorphology",
+      "chinese_name": "二维型波状起伏海床"
+    },
+    "Bedforms > 3D > Ripples (<10cm height)": {
+      "category": "geomorphology",
+      "chinese_name": "三维型波纹海床"
+    },
+    "Bedforms > Bioturbated": {
+      "category": "geomorphology",
+      "chinese_name": "生物扰动型海床"
+    },
+    "Biota > Ascidians > Stalked": {
+      "category": "bio",
+      "chinese_name": "有柄海鞘"
+    },
+    "Biota > Ascidians > Stalked > Colonial": {
+      "category": "bio",
+      "chinese_name": "有柄群体型海鞘"
+    },
+    "Biota > Ascidians > Stalked > Solitary": {
+      "category": "bio",
+      "chinese_name": "有柄、单体型海鞘"
+    },
+    "Biota > Ascidians > Unstalked": {
+      "category": "bio",
+      "chinese_name": "无柄海鞘"
+    },
+    "Biota > Ascidians > Unstalked > Colonial": {
+      "category": "bio",
+      "chinese_name": "无柄、群体型海鞘"
+    },
+    "Biota > Ascidians > Unstalked > Solitary": {
+      "category": "bio",
+      "chinese_name": "无柄、单体型海鞘"
+    },
+    "Biota > Bacterial mats": {
+      "category": "bio",
+      "chinese_name": "细菌席"
+    },
+    "Biota > Bacterial mats > Cyanobacteria": {
+      "category": "bio",
+      "chinese_name": "蓝细菌"
+    },
+    "Biota > Brachiopods": {
+      "category": "bio",
+      "chinese_name": "腕足动物"
+    },
+    "Biota > Bryozoa": {
+      "category": "bio",
+      "chinese_name": "苔藓虫"
+    },
+    "Biota > Bryozoa > Hard": {
+      "category": "bio",
+      "chinese_name": "硬质苔藓虫"
+    },
+    "Biota > Bryozoa > Hard > Branching": {
+      "category": "bio",
+      "chinese_name": "硬质、分枝状苔藓虫"
+    },
+    "Biota > Bryozoa > Hard > Encrusting": {
+      "category": "bio",
+      "chinese_name": "硬质、结壳状苔藓虫"
+    },
+    "Biota > Bryozoa > Hard > Fenestrate": {
+      "category": "bio",
+      "chinese_name": "硬质网窗状苔藓虫"
+    },
+    "Biota > Bryozoa > Hard > Massive": {
+      "category": "bio",
+      "chinese_name": "硬质、块状苔藓虫"
+    },
+    "Biota > Bryozoa > Soft": {
+      "category": "bio",
+      "chinese_name": "软质苔藓虫"
+    },
+    "Biota > Bryozoa > Soft > Dendroid": {
+      "category": "bio",
+      "chinese_name": "软质、树枝状苔藓虫"
+    },
+    "Biota > Bryozoa > Soft > Foliaceous": {
+      "category": "bio",
+      "chinese_name": "软质、叶状苔藓虫"
+    },
+    "Biota > Cnidaria": {
+      "category": "bio",
+      "chinese_name": "刺胞动物"
+    },
+    "Biota > Cnidaria > Colonial anemones": {
+      "category": "bio",
+      "chinese_name": "群体海葵刺胞动物"
+    },
+    "Biota > Cnidaria > Colonial anemones > Corallimorphs": {
+      "category": "bio",
+      "chinese_name": "群体海葵、珊瑚拟态海葵刺胞动物"
+    },
+    "Biota > Cnidaria > Colonial anemones > Zoanthids": {
+      "category": "bio",
+      "chinese_name": "群体海葵、群体海葵刺胞动物"
+    },
+    "Biota > Cnidaria > Corals": {
+      "category": "bio",
+      "chinese_name": "珊瑚刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Blue coral (Heliopora)": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、蓝珊瑚刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Branching (3D)": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、三维分枝状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Branching (3D) > Fleshy": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、三维分枝状、肉质刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Branching (3D) > Fleshy > Arborescent": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、三维分枝状、肉质、树状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Branching (3D) > Fleshy > Mushroom": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、三维分枝状、肉质、蘑菇状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Branching (3D) > Non-fleshy": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、三维分枝状、非肉质刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Branching (3D) > Non-fleshy > Arborescent": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、三维分枝状、非肉质、树状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Branching (3D) > Non-fleshy > Bottle-brush": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、三维分枝状、非肉质、瓶刷状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Branching (3D) > Non-fleshy > Bottle-brush > Complex": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、三维分枝状、非肉质、瓶刷状、复杂分枝型刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Branching (3D) > Non-fleshy > Bottle-brush > Simple": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、三维分枝状、非肉质、瓶刷状、简单型刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Branching (3D) > Non-fleshy > Bushy": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、三维分枝状、非肉质、丛枝状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Encrusting": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、结壳状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Encrusting > Lobate": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、结壳状、叶瓣状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Encrusting > Ridged / Folded": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、结壳状、脊状或褶皱状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Fan (2D)": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、二维扇状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Fan (2D) > Fern-frond": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、二维扇状、蕨叶状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Fan (2D) > Fern-frond > Complex": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、二维扇状、蕨叶状、复杂分枝型刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Fan (2D) > Fern-frond > Simple": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、二维扇状、蕨叶状、简单型刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Fan (2D) > Rigid": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、二维扇状、硬挺型刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Massive soft corals": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、块状软珊瑚刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Organ pipe coral (Tubipora)": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、管风琴珊瑚刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Quill (seapen)": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、羽状海笔刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Black & Octocorals > Whip": {
+      "category": "bio",
+      "chinese_name": "珊瑚、黑珊瑚与八放珊瑚、鞭状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Stony corals": {
+      "category": "bio",
+      "chinese_name": "珊瑚、石珊瑚刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Stony corals > Bottlebrush": {
+      "category": "bio",
+      "chinese_name": "珊瑚、石珊瑚、瓶刷状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Stony corals > Branching": {
+      "category": "bio",
+      "chinese_name": "珊瑚、石珊瑚、分枝状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Stony corals > Columnar": {
+      "category": "bio",
+      "chinese_name": "珊瑚、石珊瑚、柱状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Stony corals > Corymbose": {
+      "category": "bio",
+      "chinese_name": "珊瑚、石珊瑚、伞房状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Stony corals > Digitate": {
+      "category": "bio",
+      "chinese_name": "珊瑚、石珊瑚、指状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Stony corals > Encrusting": {
+      "category": "bio",
+      "chinese_name": "珊瑚、石珊瑚、结壳状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Stony corals > Foliose / plate": {
+      "category": "bio",
+      "chinese_name": "珊瑚、石珊瑚、叶片或板状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Stony corals > Massive": {
+      "category": "bio",
+      "chinese_name": "珊瑚、石珊瑚、块状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Stony corals > Solitary": {
+      "category": "bio",
+      "chinese_name": "珊瑚、石珊瑚、单体型刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Stony corals > Solitary > Attached": {
+      "category": "bio",
+      "chinese_name": "珊瑚、石珊瑚、单体型、附着型刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Stony corals > Solitary > Free-living": {
+      "category": "bio",
+      "chinese_name": "珊瑚、石珊瑚、单体型、自由生活型刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Stony corals > Solitary > Mushroom (Fungiidae)": {
+      "category": "bio",
+      "chinese_name": "珊瑚、石珊瑚、单体型、蘑菇珊瑚刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Stony corals > Staghorn": {
+      "category": "bio",
+      "chinese_name": "珊瑚、石珊瑚、鹿角状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Stony corals > Sub-massive": {
+      "category": "bio",
+      "chinese_name": "珊瑚、石珊瑚、亚块状刺胞动物"
+    },
+    "Biota > Cnidaria > Corals > Stony corals > Tabulate": {
+      "category": "bio",
+      "chinese_name": "珊瑚、石珊瑚、桌状刺胞动物"
+    },
+    "Biota > Cnidaria > Hydrocorals": {
+      "category": "bio",
+      "chinese_name": "水螅珊瑚刺胞动物"
+    },
+    "Biota > Cnidaria > Hydrocorals > Submassive / encrusting": {
+      "category": "bio",
+      "chinese_name": "水螅珊瑚、亚块状或结壳状刺胞动物"
+    },
+    "Biota > Cnidaria > Hydroids": {
+      "category": "bio",
+      "chinese_name": "水螅类刺胞动物"
+    },
+    "Biota > Cnidaria > Hydroids > 2D": {
+      "category": "bio",
+      "chinese_name": "水螅类、二维型刺胞动物"
+    },
+    "Biota > Cnidaria > Hydroids > Bushy": {
+      "category": "bio",
+      "chinese_name": "水螅类、丛枝状刺胞动物"
+    },
+    "Biota > Cnidaria > Hydroids > Complex": {
+      "category": "bio",
+      "chinese_name": "水螅类、复杂分枝型刺胞动物"
+    },
+    "Biota > Cnidaria > Hydroids > Feathered": {
+      "category": "bio",
+      "chinese_name": "水螅类、羽状刺胞动物"
+    },
+    "Biota > Cnidaria > Hydroids > Mossy": {
+      "category": "bio",
+      "chinese_name": "水螅类、苔状刺胞动物"
+    },
+    "Biota > Cnidaria > True anemones": {
+      "category": "bio",
+      "chinese_name": "真海葵刺胞动物"
+    },
+    "Biota > Cnidaria > True anemones > Flytrap": {
+      "category": "bio",
+      "chinese_name": "真海葵、捕蝇草状刺胞动物"
+    },
+    "Biota > Cnidaria > True anemones > Other anemones": {
+      "category": "bio",
+      "chinese_name": "真海葵、其他海葵刺胞动物"
+    },
+    "Biota > Cnidaria > Tube anemones": {
+      "category": "bio",
+      "chinese_name": "管海葵刺胞动物"
+    },
+    "Biota > Crustacea": {
+      "category": "bio",
+      "chinese_name": "甲壳动物"
+    },
+    "Biota > Crustacea > Barnacles": {
+      "category": "bio",
+      "chinese_name": "藤壶甲壳动物"
+    },
+    "Biota > Crustacea > Barnacles > Acorn": {
+      "category": "bio",
+      "chinese_name": "藤壶、橡果藤壶甲壳动物"
+    },
+    "Biota > Crustacea > Crabs": {
+      "category": "bio",
+      "chinese_name": "蟹类甲壳动物"
+    },
+    "Biota > Crustacea > Crabs > True crabs": {
+      "category": "bio",
+      "chinese_name": "蟹类、真蟹甲壳动物"
+    },
+    "Biota > Crustacea > Hermit crabs": {
+      "category": "bio",
+      "chinese_name": "寄居蟹甲壳动物"
+    },
+    "Biota > Crustacea > Hermit crabs > With anemones": {
+      "category": "bio",
+      "chinese_name": "寄居蟹、附海葵型甲壳动物"
+    },
+    "Biota > Crustacea > Hermit crabs > With shell or stone home": {
+      "category": "bio",
+      "chinese_name": "寄居蟹、携贝壳或石块型甲壳动物"
+    },
+    "Biota > Crustacea > Lobsters": {
+      "category": "bio",
+      "chinese_name": "龙虾类甲壳动物"
+    },
+    "Biota > Crustacea > Lobsters > Rock lobsters": {
+      "category": "bio",
+      "chinese_name": "龙虾类、岩龙虾甲壳动物"
+    },
+    "Biota > Crustacea > Lobsters > Squat lobsters": {
+      "category": "bio",
+      "chinese_name": "龙虾类、拟龙虾甲壳动物"
+    },
+    "Biota > Crustacea > Lobsters > True lobsters": {
+      "category": "bio",
+      "chinese_name": "龙虾类、真龙虾甲壳动物"
+    },
+    "Biota > Crustacea > Prawns / shrimps / mysids": {
+      "category": "bio",
+      "chinese_name": "对虾、虾与糠虾类甲壳动物"
+    },
+    "Biota > Crustacea > Prawns / shrimps / mysids > Prawns": {
+      "category": "bio",
+      "chinese_name": "对虾、虾与糠虾类、对虾甲壳动物"
+    },
+    "Biota > Crustacea > Prawns / shrimps / mysids > Shrimps": {
+      "category": "bio",
+      "chinese_name": "对虾、虾与糠虾类、虾类甲壳动物"
+    },
+    "Biota > Echinoderms": {
+      "category": "bio",
+      "chinese_name": "棘皮动物"
+    },
+    "Biota > Echinoderms > Feather stars": {
+      "category": "bio",
+      "chinese_name": "海百合类棘皮动物"
+    },
+    "Biota > Echinoderms > Feather stars > Unstalked crinoids": {
+      "category": "bio",
+      "chinese_name": "海百合类、无柄海百合棘皮动物"
+    },
+    "Biota > Echinoderms > Ophiuroids": {
+      "category": "bio",
+      "chinese_name": "蛇尾类棘皮动物"
+    },
+    "Biota > Echinoderms > Ophiuroids > Basket stars": {
+      "category": "bio",
+      "chinese_name": "蛇尾类、篮海星棘皮动物"
+    },
+    "Biota > Echinoderms > Ophiuroids > Brittle / snake stars": {
+      "category": "bio",
+      "chinese_name": "蛇尾类、蛇尾棘皮动物"
+    },
+    "Biota > Echinoderms > Sea cucumbers": {
+      "category": "bio",
+      "chinese_name": "海参棘皮动物"
+    },
+    "Biota > Echinoderms > Sea cucumbers > Benthic": {
+      "category": "bio",
+      "chinese_name": "海参、底栖型棘皮动物"
+    },
+    "Biota > Echinoderms > Sea cucumbers > Pelagic / swimming": {
+      "category": "bio",
+      "chinese_name": "海参、游泳型棘皮动物"
+    },
+    "Biota > Echinoderms > Sea stars": {
+      "category": "bio",
+      "chinese_name": "海星棘皮动物"
+    },
+    "Biota > Echinoderms > Sea urchins": {
+      "category": "bio",
+      "chinese_name": "海胆棘皮动物"
+    },
+    "Biota > Echinoderms > Sea urchins > Irregular urchins": {
+      "category": "bio",
+      "chinese_name": "海胆、不规则海胆棘皮动物"
+    },
+    "Biota > Echinoderms > Sea urchins > Regular urchins": {
+      "category": "bio",
+      "chinese_name": "海胆、规则海胆棘皮动物"
+    },
+    "Biota > Fishes": {
+      "category": "bio",
+      "chinese_name": "鱼类"
+    },
+    "Biota > Fishes > Bony fishes": {
+      "category": "bio",
+      "chinese_name": "硬骨鱼鱼类"
+    },
+    "Biota > Fishes > Eels": {
+      "category": "bio",
+      "chinese_name": "鳗类鱼类"
+    },
+    "Biota > Fishes > Elasmobranchs > Rays & skates": {
+      "category": "bio",
+      "chinese_name": "软骨鱼类、鳐与鳐鱼类鱼类"
+    },
+    "Biota > Fishes > Elasmobranchs > Sharks": {
+      "category": "bio",
+      "chinese_name": "软骨鱼类、鲨鱼鱼类"
+    },
+    "Biota > Jellies": {
+      "category": "bio",
+      "chinese_name": "胶质浮游动物"
+    },
+    "Biota > Jellies > Ctenophores": {
+      "category": "bio",
+      "chinese_name": "栉水母胶质浮游动物"
+    },
+    "Biota > Jellies > Hydromedusae": {
+      "category": "bio",
+      "chinese_name": "水螅水母胶质浮游动物"
+    },
+    "Biota > Jellies > Salps": {
+      "category": "bio",
+      "chinese_name": "海樽胶质浮游动物"
+    },
+    "Biota > Jellies > Siphonophores": {
+      "category": "bio",
+      "chinese_name": "管水母胶质浮游动物"
+    },
+    "Biota > Macroalgae": {
+      "category": "bio",
+      "chinese_name": "大型藻类"
+    },
+    "Biota > Macroalgae > Articulated calcareous": {
+      "category": "bio",
+      "chinese_name": "关节状钙质大型藻类"
+    },
+    "Biota > Macroalgae > Articulated calcareous > Green": {
+      "category": "bio",
+      "chinese_name": "关节状钙质、绿色大型藻类"
+    },
+    "Biota > Macroalgae > Articulated calcareous > Red": {
+      "category": "bio",
+      "chinese_name": "关节状钙质、红色大型藻类"
+    },
+    "Biota > Macroalgae > Encrusting": {
+      "category": "bio",
+      "chinese_name": "结壳状大型藻类"
+    },
+    "Biota > Macroalgae > Encrusting > Brown": {
+      "category": "bio",
+      "chinese_name": "结壳状、褐色大型藻类"
+    },
+    "Biota > Macroalgae > Encrusting > Green": {
+      "category": "bio",
+      "chinese_name": "结壳状、绿色大型藻类"
+    },
+    "Biota > Macroalgae > Encrusting > Red": {
+      "category": "bio",
+      "chinese_name": "结壳状、红色大型藻类"
+    },
+    "Biota > Macroalgae > Encrusting > Red > Calcareous": {
+      "category": "bio",
+      "chinese_name": "结壳状、红色、钙质大型藻类"
+    },
+    "Biota > Macroalgae > Encrusting > Red > Non-calcareous": {
+      "category": "bio",
+      "chinese_name": "结壳状、红色、非钙质大型藻类"
+    },
+    "Biota > Macroalgae > Erect coarse branching": {
+      "category": "bio",
+      "chinese_name": "直立粗分枝状大型藻类"
+    },
+    "Biota > Macroalgae > Erect coarse branching > Brown": {
+      "category": "bio",
+      "chinese_name": "直立粗分枝状、褐色大型藻类"
+    },
+    "Biota > Macroalgae > Erect coarse branching > Green": {
+      "category": "bio",
+      "chinese_name": "直立粗分枝状、绿色大型藻类"
+    },
+    "Biota > Macroalgae > Erect coarse branching > Red": {
+      "category": "bio",
+      "chinese_name": "直立粗分枝状、红色大型藻类"
+    },
+    "Biota > Macroalgae > Erect fine branching": {
+      "category": "bio",
+      "chinese_name": "直立细分枝状大型藻类"
+    },
+    "Biota > Macroalgae > Erect fine branching > Brown": {
+      "category": "bio",
+      "chinese_name": "直立细分枝状、褐色大型藻类"
+    },
+    "Biota > Macroalgae > Erect fine branching > Green": {
+      "category": "bio",
+      "chinese_name": "直立细分枝状、绿色大型藻类"
+    },
+    "Biota > Macroalgae > Erect fine branching > Red": {
+      "category": "bio",
+      "chinese_name": "直立细分枝状、红色大型藻类"
+    },
+    "Biota > Macroalgae > Filamentous / filiform": {
+      "category": "bio",
+      "chinese_name": "丝状大型藻类"
+    },
+    "Biota > Macroalgae > Filamentous / filiform > Brown": {
+      "category": "bio",
+      "chinese_name": "丝状、褐色大型藻类"
+    },
+    "Biota > Macroalgae > Filamentous / filiform > Green": {
+      "category": "bio",
+      "chinese_name": "丝状、绿色大型藻类"
+    },
+    "Biota > Macroalgae > Filamentous / filiform > Red": {
+      "category": "bio",
+      "chinese_name": "丝状、红色大型藻类"
+    },
+    "Biota > Macroalgae > Filamentous / filiform > Turfing algae": {
+      "category": "bio",
+      "chinese_name": "丝状、丛生藻大型藻类"
+    },
+    "Biota > Macroalgae > Filamentous / filiform > Turfing algae > Green": {
+      "category": "bio",
+      "chinese_name": "丝状、丛生藻、绿色大型藻类"
+    },
+    "Biota > Macroalgae > Filamentous / filiform > Turfing algae > Red": {
+      "category": "bio",
+      "chinese_name": "丝状、丛生藻、红色大型藻类"
+    },
+    "Biota > Macroalgae > Globose / saccate": {
+      "category": "bio",
+      "chinese_name": "球状或囊状大型藻类"
+    },
+    "Biota > Macroalgae > Globose / saccate > Brown": {
+      "category": "bio",
+      "chinese_name": "球状或囊状、褐色大型藻类"
+    },
+    "Biota > Macroalgae > Globose / saccate > Green": {
+      "category": "bio",
+      "chinese_name": "球状或囊状、绿色大型藻类"
+    },
+    "Biota > Macroalgae > Laminate": {
+      "category": "bio",
+      "chinese_name": "层状大型藻类"
+    },
+    "Biota > Macroalgae > Laminate > Brown": {
+      "category": "bio",
+      "chinese_name": "层状、褐色大型藻类"
+    },
+    "Biota > Macroalgae > Laminate > Green": {
+      "category": "bio",
+      "chinese_name": "层状、绿色大型藻类"
+    },
+    "Biota > Macroalgae > Laminate > Red": {
+      "category": "bio",
+      "chinese_name": "层状、红色大型藻类"
+    },
+    "Biota > Macroalgae > Large canopy-forming": {
+      "category": "bio",
+      "chinese_name": "大型冠层状大型藻类"
+    },
+    "Biota > Macroalgae > Large canopy-forming > Brown": {
+      "category": "bio",
+      "chinese_name": "大型冠层状、褐色大型藻类"
+    },
+    "Biota > Macroalgae > Sheet-like / membraneous": {
+      "category": "bio",
+      "chinese_name": "片状或膜状大型藻类"
+    },
+    "Biota > Macroalgae > Sheet-like / membraneous > Brown": {
+      "category": "bio",
+      "chinese_name": "片状或膜状、褐色大型藻类"
+    },
+    "Biota > Macroalgae > Sheet-like / membraneous > Green": {
+      "category": "bio",
+      "chinese_name": "片状或膜状、绿色大型藻类"
+    },
+    "Biota > Macroalgae > Sheet-like / membraneous > Red": {
+      "category": "bio",
+      "chinese_name": "片状或膜状、红色大型藻类"
+    },
+    "Biota > Microalgae": {
+      "category": "bio",
+      "chinese_name": "微藻"
+    },
+    "Biota > Molluscs": {
+      "category": "bio",
+      "chinese_name": "软体动物"
+    },
+    "Biota > Molluscs > Bivalves": {
+      "category": "bio",
+      "chinese_name": "双壳类软体动物"
+    },
+    "Biota > Molluscs > Bivalves > Scallop": {
+      "category": "bio",
+      "chinese_name": "双壳类、扇贝软体动物"
+    },
+    "Biota > Molluscs > Cephalopods > Octopods": {
+      "category": "bio",
+      "chinese_name": "头足类、章鱼软体动物"
+    },
+    "Biota > Molluscs > Cephalopods > Squid": {
+      "category": "bio",
+      "chinese_name": "头足类、乌贼软体动物"
+    },
+    "Biota > Molluscs > Chitons": {
+      "category": "bio",
+      "chinese_name": "多板纲动物软体动物"
+    },
+    "Biota > Molluscs > Gastropods": {
+      "category": "bio",
+      "chinese_name": "腹足类软体动物"
+    },
+    "Biota > Sea spiders": {
+      "category": "bio",
+      "chinese_name": "海蜘蛛"
+    },
+    "Biota > Seagrasses": {
+      "category": "bio",
+      "chinese_name": "海草"
+    },
+    "Biota > Seagrasses > Elliptical leaves": {
+      "category": "bio",
+      "chinese_name": "椭圆叶型海草"
+    },
+    "Biota > Seagrasses > Strap-like leaves": {
+      "category": "bio",
+      "chinese_name": "带状叶型海草"
+    },
+    "Biota > Sponges": {
+      "category": "bio",
+      "chinese_name": "海绵"
+    },
+    "Biota > Sponges > Crusts": {
+      "category": "bio",
+      "chinese_name": "壳状海绵"
+    },
+    "Biota > Sponges > Crusts > Creeping / ramose": {
+      "category": "bio",
+      "chinese_name": "壳状、匍匐或枝状海绵"
+    },
+    "Biota > Sponges > Crusts > Creeping / ramose > Creeping": {
+      "category": "bio",
+      "chinese_name": "壳状、匍匐或枝状、匍匐型海绵"
+    },
+    "Biota > Sponges > Crusts > Creeping / ramose > Ramose": {
+      "category": "bio",
+      "chinese_name": "壳状、匍匐或枝状、枝状海绵"
+    },
+    "Biota > Sponges > Crusts > Creeping / ramose > Repent": {
+      "category": "bio",
+      "chinese_name": "壳状、匍匐或枝状、蔓生型海绵"
+    },
+    "Biota > Sponges > Crusts > Creeping / ramose > Tempura": {
+      "category": "bio",
+      "chinese_name": "壳状、匍匐或枝状、天妇罗状海绵"
+    },
+    "Biota > Sponges > Crusts > Encrusting": {
+      "category": "bio",
+      "chinese_name": "壳状、结壳状海绵"
+    },
+    "Biota > Sponges > Crusts > Encrusting > Fluffy": {
+      "category": "bio",
+      "chinese_name": "壳状、结壳状、绒毛状海绵"
+    },
+    "Biota > Sponges > Crusts > Encrusting > Granular": {
+      "category": "bio",
+      "chinese_name": "壳状、结壳状、颗粒状海绵"
+    },
+    "Biota > Sponges > Crusts > Encrusting > Lumpy": {
+      "category": "bio",
+      "chinese_name": "壳状、结壳状、瘤状海绵"
+    },
+    "Biota > Sponges > Crusts > Encrusting > Nodular": {
+      "category": "bio",
+      "chinese_name": "壳状、结壳状、结节状海绵"
+    },
+    "Biota > Sponges > Crusts > Encrusting > Oscula": {
+      "category": "bio",
+      "chinese_name": "壳状、结壳状、出水孔型海绵"
+    },
+    "Biota > Sponges > Crusts > Encrusting > Papillate": {
+      "category": "bio",
+      "chinese_name": "壳状、结壳状、乳突状海绵"
+    },
+    "Biota > Sponges > Crusts > Encrusting > Rough": {
+      "category": "bio",
+      "chinese_name": "壳状、结壳状、粗糙型海绵"
+    },
+    "Biota > Sponges > Crusts > Encrusting > Smooth": {
+      "category": "bio",
+      "chinese_name": "壳状、结壳状、光滑型海绵"
+    },
+    "Biota > Sponges > Crusts > Encrusting > Spikey": {
+      "category": "bio",
+      "chinese_name": "壳状、结壳状、刺状海绵"
+    },
+    "Biota > Sponges > Crusts > Encrusting > Thick": {
+      "category": "bio",
+      "chinese_name": "壳状、结壳状、厚壁型海绵"
+    },
+    "Biota > Sponges > Cup-likes": {
+      "category": "bio",
+      "chinese_name": "杯状形态海绵"
+    },
+    "Biota > Sponges > Cup-likes > Barrels": {
+      "category": "bio",
+      "chinese_name": "杯状形态、桶状海绵"
+    },
+    "Biota > Sponges > Cup-likes > Barrels > Donut": {
+      "category": "bio",
+      "chinese_name": "杯状形态、桶状、环形海绵"
+    },
+    "Biota > Sponges > Cup-likes > Barrels > Mouth": {
+      "category": "bio",
+      "chinese_name": "杯状形态、桶状、口缘型海绵"
+    },
+    "Biota > Sponges > Cup-likes > Barrels > Oscula": {
+      "category": "bio",
+      "chinese_name": "杯状形态、桶状、出水孔型海绵"
+    },
+    "Biota > Sponges > Cup-likes > Barrels > Rotund": {
+      "category": "bio",
+      "chinese_name": "杯状形态、桶状、圆钝型海绵"
+    },
+    "Biota > Sponges > Cup-likes > Barrels > Thick": {
+      "category": "bio",
+      "chinese_name": "杯状形态、桶状、厚壁型海绵"
+    },
+    "Biota > Sponges > Cup-likes > Barrels > Tubular": {
+      "category": "bio",
+      "chinese_name": "杯状形态、桶状、管状海绵"
+    },
+    "Biota > Sponges > Cup-likes > Cups": {
+      "category": "bio",
+      "chinese_name": "杯状形态、杯形海绵"
+    },
+    "Biota > Sponges > Cup-likes > Cups > Cup / goblet": {
+      "category": "bio",
+      "chinese_name": "杯状形态、杯形、杯状或高脚杯状海绵"
+    },
+    "Biota > Sponges > Cup-likes > Cups > Cup / goblet > Frilly": {
+      "category": "bio",
+      "chinese_name": "杯状形态、杯形、杯状或高脚杯状、褶边状海绵"
+    },
+    "Biota > Sponges > Cup-likes > Cups > Cup / goblet > Irregular": {
+      "category": "bio",
+      "chinese_name": "杯状形态、杯形、杯状或高脚杯状、不规则型海绵"
+    },
+    "Biota > Sponges > Cup-likes > Cups > Cup / goblet > Smooth": {
+      "category": "bio",
+      "chinese_name": "杯状形态、杯形、杯状或高脚杯状、光滑型海绵"
+    },
+    "Biota > Sponges > Cup-likes > Cups > Cup / goblet > Stalked": {
+      "category": "bio",
+      "chinese_name": "杯状形态、杯形、杯状或高脚杯状、有柄海绵"
+    },
+    "Biota > Sponges > Cup-likes > Cups > Cup / goblet > Thick": {
+      "category": "bio",
+      "chinese_name": "杯状形态、杯形、杯状或高脚杯状、厚壁型海绵"
+    },
+    "Biota > Sponges > Cup-likes > Cups > Cup / goblet > Thin": {
+      "category": "bio",
+      "chinese_name": "杯状形态、杯形、杯状或高脚杯状、薄壁型海绵"
+    },
+    "Biota > Sponges > Cup-likes > Cups > Incomplete cup / curled fan": {
+      "category": "bio",
+      "chinese_name": "杯状形态、杯形、不完整杯状或卷曲扇状海绵"
+    },
+    "Biota > Sponges > Cup-likes > Tubes and chimneys": {
+      "category": "bio",
+      "chinese_name": "杯状形态、管状与烟囱状海绵"
+    },
+    "Biota > Sponges > Cup-likes > Tubes and chimneys > Chimney": {
+      "category": "bio",
+      "chinese_name": "杯状形态、管状与烟囱状、烟囱状海绵"
+    },
+    "Biota > Sponges > Cup-likes > Tubes and chimneys > Tubular": {
+      "category": "bio",
+      "chinese_name": "杯状形态、管状与烟囱状、管状海绵"
+    },
+    "Biota > Sponges > Erect forms": {
+      "category": "bio",
+      "chinese_name": "直立形态海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Arborescent": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、树状海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Arborescent > Digitate": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、树状、指状海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Arborescent > Irregular": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、树状、不规则型海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Arborescent > Short": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、树状、短枝型海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Arborescent > Stumpy": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、树状、矮粗型海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Arborescent > Thin": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、树状、薄壁型海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Arborescent > Thorny": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、树状、刺枝型海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Branching": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、分枝状海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Branching > Digitate": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、分枝状、指状海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Branching > Fine": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、分枝状、细枝型海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Branching > Frilly": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、分枝状、褶边状海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Branching > Lumpy": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、分枝状、瘤状海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Branching > Pointed": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、分枝状、尖端型海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Branching > Prostrate": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、分枝状、平伏型海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Branching > Remose": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、分枝状、稀疏分枝型海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Branching > Repent": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、分枝状、蔓生型海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Branching > Short": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、分枝状、短枝型海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Branching > Spindles": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、分枝状、纺锤状海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Branching > Stubby": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、分枝状、粗短型海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Branching > Stumpy": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、分枝状、矮粗型海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Branching > Thin": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、分枝状、薄壁型海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Branching > Thorny": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、分枝状、刺枝型海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Fan": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、扇状海绵"
+    },
+    "Biota > Sponges > Erect forms > Branching > Tubular": {
+      "category": "bio",
+      "chinese_name": "直立形态、分枝状、管状海绵"
+    },
+    "Biota > Sponges > Erect forms > Laminar": {
+      "category": "bio",
+      "chinese_name": "直立形态、板层状海绵"
+    },
+    "Biota > Sponges > Erect forms > Laminar > Fan": {
+      "category": "bio",
+      "chinese_name": "直立形态、板层状、扇状海绵"
+    },
+    "Biota > Sponges > Erect forms > Laminar > Laminar": {
+      "category": "bio",
+      "chinese_name": "直立形态、板层状、板层状海绵"
+    },
+    "Biota > Sponges > Erect forms > Palmate": {
+      "category": "bio",
+      "chinese_name": "直立形态、掌状海绵"
+    },
+    "Biota > Sponges > Erect forms > Palmate > Arborescent": {
+      "category": "bio",
+      "chinese_name": "直立形态、掌状、树状海绵"
+    },
+    "Biota > Sponges > Erect forms > Palmate > Palmate": {
+      "category": "bio",
+      "chinese_name": "直立形态、掌状、掌状海绵"
+    },
+    "Biota > Sponges > Erect forms > Palmate > Pronghorn": {
+      "category": "bio",
+      "chinese_name": "直立形态、掌状、叉角状海绵"
+    },
+    "Biota > Sponges > Erect forms > Simple": {
+      "category": "bio",
+      "chinese_name": "直立形态、简单型海绵"
+    },
+    "Biota > Sponges > Erect forms > Stalked": {
+      "category": "bio",
+      "chinese_name": "直立形态、有柄海绵"
+    },
+    "Biota > Sponges > Massive forms": {
+      "category": "bio",
+      "chinese_name": "块状形态海绵"
+    },
+    "Biota > Sponges > Massive forms > Balls": {
+      "category": "bio",
+      "chinese_name": "块状形态、球形海绵"
+    },
+    "Biota > Sponges > Massive forms > Balls > Ball": {
+      "category": "bio",
+      "chinese_name": "块状形态、球形、球状海绵"
+    },
+    "Biota > Sponges > Massive forms > Balls > Globular": {
+      "category": "bio",
+      "chinese_name": "块状形态、球形、球形海绵"
+    },
+    "Biota > Sponges > Massive forms > Cryptic": {
+      "category": "bio",
+      "chinese_name": "块状形态、隐蔽型海绵"
+    },
+    "Biota > Sponges > Massive forms > Simple": {
+      "category": "bio",
+      "chinese_name": "块状形态、简单型海绵"
+    },
+    "Biota > Sponges > Massive forms > Simple > Ball": {
+      "category": "bio",
+      "chinese_name": "块状形态、简单型、球状海绵"
+    },
+    "Biota > Sponges > Massive forms > Simple > Creep": {
+      "category": "bio",
+      "chinese_name": "块状形态、简单型、匍匐状海绵"
+    },
+    "Biota > Sponges > Massive forms > Simple > Crust": {
+      "category": "bio",
+      "chinese_name": "块状形态、简单型、壳状海绵"
+    },
+    "Biota > Sponges > Massive forms > Simple > Donut": {
+      "category": "bio",
+      "chinese_name": "块状形态、简单型、环形海绵"
+    },
+    "Biota > Sponges > Massive forms > Simple > Globes": {
+      "category": "bio",
+      "chinese_name": "块状形态、简单型、球块状海绵"
+    },
+    "Biota > Sponges > Massive forms > Simple > Holey": {
+      "category": "bio",
+      "chinese_name": "块状形态、简单型、多孔型海绵"
+    },
+    "Biota > Sponges > Massive forms > Simple > Irregular": {
+      "category": "bio",
+      "chinese_name": "块状形态、简单型、不规则型海绵"
+    },
+    "Biota > Sponges > Massive forms > Simple > Laminar": {
+      "category": "bio",
+      "chinese_name": "块状形态、简单型、板层状海绵"
+    },
+    "Biota > Sponges > Massive forms > Simple > Lumpy": {
+      "category": "bio",
+      "chinese_name": "块状形态、简单型、瘤状海绵"
+    },
+    "Biota > Sponges > Massive forms > Simple > Nodular": {
+      "category": "bio",
+      "chinese_name": "块状形态、简单型、结节状海绵"
+    },
+    "Biota > Sponges > Massive forms > Simple > Oscula": {
+      "category": "bio",
+      "chinese_name": "块状形态、简单型、出水孔型海绵"
+    },
+    "Biota > Sponges > Massive forms > Simple > Papillate": {
+      "category": "bio",
+      "chinese_name": "块状形态、简单型、乳突状海绵"
+    },
+    "Biota > Sponges > Massive forms > Simple > Ribbon": {
+      "category": "bio",
+      "chinese_name": "块状形态、简单型、带状海绵"
+    },
+    "Biota > Sponges > Massive forms > Simple > Rough": {
+      "category": "bio",
+      "chinese_name": "块状形态、简单型、粗糙型海绵"
+    },
+    "Biota > Sponges > Massive forms > Simple > Shapeless": {
+      "category": "bio",
+      "chinese_name": "块状形态、简单型、不定形海绵"
+    },
+    "Biota > Sponges > Massive forms > Simple > Smooth": {
+      "category": "bio",
+      "chinese_name": "块状形态、简单型、光滑型海绵"
+    },
+    "Biota > Sponges > Massive forms > Simple > Spikey": {
+      "category": "bio",
+      "chinese_name": "块状形态、简单型、刺状海绵"
+    },
+    "Biota > Worms": {
+      "category": "bio",
+      "chinese_name": "蠕虫"
+    },
+    "Biota > Worms > Acorn worms": {
+      "category": "bio",
+      "chinese_name": "柱头虫蠕虫"
+    },
+    "Biota > Worms > Flatworms": {
+      "category": "bio",
+      "chinese_name": "扁形虫蠕虫"
+    },
+    "Biota > Worms > Penisworms": {
+      "category": "bio",
+      "chinese_name": "阴茎虫蠕虫"
+    },
+    "Biota > Worms > Polychaetes": {
+      "category": "bio",
+      "chinese_name": "多毛类蠕虫"
+    },
+    "Biota > Worms > Polychaetes > Other polychaetes": {
+      "category": "bio",
+      "chinese_name": "多毛类、其他多毛类蠕虫"
+    },
+    "Biota > Worms > Polychaetes > Tube worms": {
+      "category": "bio",
+      "chinese_name": "多毛类、管栖多毛类蠕虫"
+    },
+    "No bedforms": {
+      "category": "geomorphology",
+      "chinese_name": "无明显海床形态"
+    },
+    "Substrate > Consolidated (hard)": {
+      "category": "substrate",
+      "chinese_name": "固结型硬质底质"
+    },
+    "Substrate > Consolidated (hard) > Boulders": {
+      "category": "substrate",
+      "chinese_name": "固结型硬质巨砾底质"
+    },
+    "Substrate > Consolidated (hard) > Cobbles": {
+      "category": "substrate",
+      "chinese_name": "固结型硬质、卵石底质"
+    },
+    "Substrate > Consolidated (hard) > Rock": {
+      "category": "substrate",
+      "chinese_name": "固结型硬质、岩石底质"
+    },
+    "Substrate > Unconsolidated (soft)": {
+      "category": "substrate",
+      "chinese_name": "未固结软质底质"
+    },
+    "Substrate > Unconsolidated (soft) > Pebble / gravel": {
+      "category": "substrate",
+      "chinese_name": "未固结软质、砾石底质"
+    },
+    "Substrate > Unconsolidated (soft) > Pebble / gravel > Biologenic": {
+      "category": "substrate",
+      "chinese_name": "未固结软质、砾石、生物成因底质"
+    },
+    "Substrate > Unconsolidated (soft) > Pebble / gravel > Biologenic > Coquina / shellhash": {
+      "category": "substrate",
+      "chinese_name": "未固结软质、砾石、生物成因、贝壳碎屑底质"
+    },
+    "Substrate > Unconsolidated (soft) > Pebble / gravel > Biologenic > Coral rubble": {
+      "category": "substrate",
+      "chinese_name": "未固结软质、砾石、生物成因、珊瑚碎屑底质"
+    },
+    "Substrate > Unconsolidated (soft) > Pebble / gravel > Biologenic > Rhodoliths": {
+      "category": "substrate",
+      "chinese_name": "未固结软质、砾石、生物成因、红藻球底质"
+    },
+    "Substrate > Unconsolidated (soft) > Pebble / gravel > Biologenic > Screwshells": {
+      "category": "substrate",
+      "chinese_name": "未固结软质、砾石、生物成因、螺旋贝壳底质"
+    },
+    "Substrate > Unconsolidated (soft) > Pebble / gravel > Gravel (2-10mm)": {
+      "category": "substrate",
+      "chinese_name": "未固结软质、砾石、砾石（2-10毫米）底质"
+    },
+    "Substrate > Unconsolidated (soft) > Pebble / gravel > Pebble (10-64mm)": {
+      "category": "substrate",
+      "chinese_name": "未固结软质、砾石、卵石（10-64毫米）底质"
+    },
+    "Substrate > Unconsolidated (soft) > Sand / mud (<2mm)": {
+      "category": "substrate",
+      "chinese_name": "未固结软质、沙泥（小于2毫米）底质"
+    },
+    "Substrate > Unconsolidated (soft) > Sand / mud (<2mm) > Coarse sand (with shell fragments)": {
+      "category": "substrate",
+      "chinese_name": "未固结软质、沙泥（小于2毫米）、含贝壳碎屑的粗砂底质"
+    },
+    "Substrate > Unconsolidated (soft) > Sand / mud (<2mm) > Fine sand (no shell fragments)": {
+      "category": "substrate",
+      "chinese_name": "未固结软质、沙泥（小于2毫米）、无贝壳碎屑细砂底质"
+    },
+    "Substrate > Unconsolidated (soft) > Sand / mud (<2mm) > Mud / silt (<64um)": {
+      "category": "substrate",
+      "chinese_name": "未固结软质、沙泥（小于2毫米）、泥或粉砂（小于64微米）底质"
+    }
+  },
+  "schema_version": 1
+}

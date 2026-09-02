@@ -1,11 +1,27 @@
 from __future__ import annotations
 
+import logging
 import threading
 import time
+from typing import Protocol
+
+from deep_sea_explorer.ports.session_store import SessionStore
+
+
+LOGGER = logging.getLogger(__name__)
+
+
+class MonitoringGateway(Protocol):
+    def process_session(self, session_id: str) -> object: ...
 
 
 class MemoWorker:
-    def __init__(self, monitoring: object, sessions: object, interval_seconds: float = 1.0) -> None:
+    def __init__(
+        self,
+        monitoring: MonitoringGateway,
+        sessions: SessionStore,
+        interval_seconds: float = 1.0,
+    ) -> None:
         self.monitoring, self.sessions, self.interval_seconds = (
             monitoring,
             sessions,
@@ -20,7 +36,12 @@ class MemoWorker:
             try:
                 self.monitoring.process_session(session_id)
                 self.last_success_monotonic = time.monotonic()
-            except Exception:
+            except Exception as error:
+                LOGGER.warning(
+                    "memo worker retry_scheduled session_id=%s error_type=%s",
+                    session_id,
+                    type(error).__name__,
+                )
                 continue
 
     def start(self) -> None:

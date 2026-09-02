@@ -1,0 +1,443 @@
+from __future__ import annotations
+
+import threading
+from pathlib import Path
+
+import pytest
+
+from deep_sea_explorer.config import ModelBackend, Settings
+from deep_sea_explorer.container import build_local_container
+from deep_sea_explorer.domain.models import CountItem, ModelHealth
+from deep_sea_explorer.infrastructure.models.local.adapters import (
+    MONITORING_DESCRIPTION_PROMPT,
+    QwenAdapter,
+    _capture_decision,
+    _monitoring_analysis,
+    _survey_event_evaluation,
+)
+from deep_sea_explorer.infrastructure.models.local.errors import (
+    GpuOutOfMemory,
+    InferenceQueueFull,
+    ModelOutputInvalid,
+)
+from deep_sea_explorer.infrastructure.models.local.gateways import (
+    DisabledImageGateway,
+    LocalEmbeddingGateway,
+    LocalImageGateway,
+    LocalVisionGateway,
+)
+from deep_sea_explorer.infrastructure.models.local.runtime import (
+    InferenceCoordinator,
+    LocalModelRuntime,
+)
+
+
+class RecordingAdapter:
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.loads = 0
+        self.unloads = 0
+        self.ready = False
+
+    def load(self) -> None:
+        self.loads += 1
+        self.ready = True
+
+    def unload(self) -> None:
+        self.unloads += 1
+        self.ready = False
+
+    def health(self) -> ModelHealth:
+        return ModelHealth(self.ready, "ready" if self.ready else "not_loaded")
+
+
+def test_monitoring_description_prompt_requires_scientific_two_to_four_sentence_output() -> None:
+    assert "科学解说式语言" in MONITORING_DESCRIPTION_PROMPT
+    assert "二至四句" in MONITORING_DESCRIPTION_PROMPT
+    assert "自然、连贯的客观描述" in MONITORING_DESCRIPTION_PROMPT
+    assert "不使用文学化、评价性或超出图像证据的推断性表述" in MONITORING_DESCRIPTION_PROMPT
+    for example in (
+        "这片海底以柔软的沙泥底质为主",
+        "柔软的沙泥底质上分布着石珊瑚",
+        "该区域以岩石底质为主",
+    ):
+        assert example in MONITORING_DESCRIPTION_PROMPT
+
+
+def test_video_frame_reader_duplicates_a_single_frame_for_qwen(tmp_path: Path) -> None:
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    video = tmp_path / "single-frame.mp4"
+    writer = cv2.VideoWriter(str(video), cv2.VideoWriter_fourcc(*"mp4v"), 4, (32, 32))
+    assert writer.isOpened()
+    writer.write(np.full((32, 32, 3), 127, dtype=np.uint8))
+    writer.release()
+
+    frames = QwenAdapter._video_frames(video)
+
+    assert frames.shape[0] == 2
+    assert np.array_equal(frames[0], frames[1])
+
+
+
+def test_qwen_knowledge_base_description_passes_the_prompt_verbatim(tmp_path: Path) -> None:
+    image = tmp_path / "label.jpg"
+    image.write_bytes(b"not-decoded-in-this-unit-test")
+    adapter = QwenAdapter("/models/qwen")
+    observed: dict[str, object] = {}
+    prompt = "## 指定生物\n\n**目标生物：Biota > Sponges**"
+
+    adapter._load_rgb_image = lambda path: "image-object"  # type: ignore[method-assign]
+    adapter._generate = lambda content, **kwargs: observed.update(content=content, kwargs=kwargs) or "对象呈多孔状表面。"  # type: ignore[method-assign]
+
+    assert adapter.describe_knowledge_base_label(image, prompt) == "对象呈多孔状表面。"
+    assert observed["content"] == [{"type": "image", "image": "image-object"}, {"type": "text", "text": prompt}]
+    assert observed["kwargs"] == {"max_new_tokens": 512, "direct_response": True, "do_sample": False}
+
+    assert adapter.describe_knowledge_base_label(image, prompt, retry_sample=True) == "\u5bf9\u8c61\u5448\u591a\u5b54\u72b6\u8868\u9762\u3002"
+    assert observed["kwargs"] == {"max_new_tokens": 512, "direct_response": True, "do_sample": True}
+
+
+def test_runtime_reuses_current_model_and_unloads_before_switching() -> None:
+    runtime = LocalModelRuntime(InferenceCoordinator())
+    qwen, image = RecordingAdapter("qwen"), RecordingAdapter("image")
+
+    assert runtime.invoke(qwen, lambda: "first") == "first"
+    assert runtime.invoke(qwen, lambda: "second") == "second"
+    assert runtime.invoke(image, lambda: "image") == "image"
+
+    assert (qwen.loads, qwen.unloads) == (1, 1)
+    assert (image.loads, image.unloads) == (1, 0)
+    assert runtime.health(image) == ModelHealth(True, "ready")
+
+
+def test_runtime_releases_gpu_slot_after_an_exception() -> None:
+    coordinator = InferenceCoordinator()
+    runtime = LocalModelRuntime(coordinator)
+    adapter = RecordingAdapter("qwen")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        runtime.invoke(adapter, lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    assert coordinator.active == 0
+    assert runtime.invoke(adapter, lambda: "recovered") == "recovered"
+
+
+def test_runtime_unloads_the_resident_model_after_gpu_oom() -> None:
+    runtime = LocalModelRuntime(InferenceCoordinator())
+    adapter = RecordingAdapter("qwen")
+
+    with pytest.raises(GpuOutOfMemory):
+        runtime.invoke(
+            adapter,
+            lambda: (_ for _ in ()).throw(RuntimeError("CUDA out of memory")),
+        )
+
+    assert (adapter.loads, adapter.unloads) == (1, 1)
+    assert runtime.invoke(adapter, lambda: "recovered") == "recovered"
+    assert adapter.loads == 2
+
+
+def test_runtime_holds_its_gpu_slot_until_a_stream_is_consumed() -> None:
+    coordinator = InferenceCoordinator(max_concurrent=1, max_queue=0)
+    runtime = LocalModelRuntime(coordinator)
+    adapter = RecordingAdapter("qwen")
+
+    stream = runtime.stream(adapter, lambda: iter(("first", "second")))
+    assert next(stream) == "first"
+    assert coordinator.active == 1
+    assert list(stream) == ["second"]
+    assert coordinator.active == 0
+
+
+def test_coordinator_rejects_work_when_queue_is_full() -> None:
+    coordinator = InferenceCoordinator(max_concurrent=1, max_queue=0, queue_timeout_seconds=5)
+    started, release = threading.Event(), threading.Event()
+    worker = threading.Thread(
+        target=lambda: coordinator.execute(lambda: (started.set(), release.wait(timeout=5))),
+        daemon=True,
+    )
+    worker.start()
+    assert started.wait(timeout=2)
+
+    with pytest.raises(InferenceQueueFull):
+        coordinator.execute(lambda: None)
+
+    release.set()
+    worker.join(timeout=2)
+    assert not worker.is_alive()
+    assert coordinator.active == 0
+
+
+def test_frame_decision_requires_contract_shaped_json() -> None:
+    decision = _capture_decision(
+        '{"is_deepsea": true, "is_typical": false, "category": "bio", "description": "fish", '
+        '"organisms": [{"name": "fish", "count": 2}], "env_features": []}'
+    )
+    assert decision.organisms[0].name == "fish"
+
+    with pytest.raises(ModelOutputInvalid):
+        _capture_decision("not json")
+
+
+def test_frame_decision_normalizes_string_items_from_qwen() -> None:
+    decision = _capture_decision(
+        '{"is_deepsea": "true", "is_typical": 1, "category": "ENV", '
+        '"description": "rocky seafloor", "organisms": [], '
+        '"env_features": ["rock", {"name": "low light", "count": "2"}]}'
+    )
+
+    assert decision.is_deepsea is True
+    assert decision.is_typical is True
+    assert decision.env_features[0].name == "rock"
+    assert decision.env_features[0].count == 1
+    assert decision.env_features[1].name == "low light"
+    assert decision.env_features[1].count == 2
+
+
+def test_frame_decision_still_rejects_unusable_count_items() -> None:
+    with pytest.raises(ModelOutputInvalid):
+        _capture_decision(
+            '{"is_deepsea": true, "is_typical": true, "category": "env", '
+            '"description": "seafloor", "organisms": [], "env_features": [42]}'
+        )
+
+
+def test_survey_event_requires_a_valid_structured_change() -> None:
+    evaluation = _survey_event_evaluation(
+        '{"survey_value": true, "event_type": "new_element", "scene_changed": false, '
+        '"new_elements": [{"category": "organism", "name": "深海鱼", "is_new": true}], '
+        '"description": "候选画面中出现新的深海鱼。", "confidence": 0.91}'
+    )
+    assert evaluation.survey_value is True
+    assert evaluation.new_elements[0]["name"] == "深海鱼"
+
+    lora_evaluation = _survey_event_evaluation(
+        '{"survey_value": true, "event_type": "new_element", '
+        '"new_elements": [{"category": "organism", "name": "鱼", "is_new": true}], '
+        '"description": "该场景包含一条鱼。", "confidence": 0.91}'
+    )
+    assert lora_evaluation.scene_changed is True
+
+    normalized_lora_evaluation = _survey_event_evaluation(
+        '{"survey_value": true, "event_type": "none", '
+        '"new_elements": [{"category": "organism", "name": "鱼", "is_new": true}], '
+        '"description": "场景显示一条鱼在深海沉积物附近游动。", "confidence": 0.99}'
+    )
+    assert normalized_lora_evaluation.event_type == "new_element"
+
+    catami_evaluation = _survey_event_evaluation(
+        '{"survey_value": true, "event_type": "new_element", '
+        '"new_elements": [{"category": "Biota", "name": "fish", "is_new": true}], '
+        '"description": "The scene contains a fish.", "confidence": 0.99}'
+    )
+    assert catami_evaluation.new_elements[0]["category"] == "organism"
+
+    with pytest.raises(ModelOutputInvalid):
+        _survey_event_evaluation(
+            '{"survey_value": "false", "event_type": "major_scene_change", '
+            '"scene_changed": false, "new_elements": [], "description": "无变化", "confidence": 0.4}'
+        )
+
+
+def test_report_summary_requests_chinese_and_removes_markdown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = QwenAdapter("/models/qwen")
+    captured: dict[str, object] = {}
+
+    def generate(
+        content: list[dict[str, object]],
+        *,
+        max_new_tokens: int,
+    ) -> str:
+        captured["content"] = content
+        captured["max_new_tokens"] = max_new_tokens
+        return "**任务总结**\n- 发现深海生物，并建议继续观测。"
+
+    monkeypatch.setattr(adapter, "_generate", generate)
+
+    summary = adapter.summarize_report({"memos": [{"text": "发现生物"}]})
+
+    prompt = str(captured["content"])
+    assert "必须使用简体中文" in prompt
+    assert "不要标题、列表、编号、Markdown" in prompt
+    assert captured["max_new_tokens"] == 512
+    assert summary == "任务总结 发现深海生物，并建议继续观测。"
+
+
+def test_text_answer_sends_no_video_to_qwen(monkeypatch: pytest.MonkeyPatch) -> None:
+    adapter = QwenAdapter("/models/qwen")
+    captured: dict[str, object] = {}
+
+    def generate(content: list[dict[str, object]], **_: object) -> str:
+        captured["content"] = content
+        return "这是纯文本回答。"
+
+    monkeypatch.setattr(adapter, "_generate", generate)
+
+    assert adapter.answer("你好") == "这是纯文本回答。"
+    assert captured["content"] == [{"type": "text", "text": "你好"}]
+
+
+def test_video_description_keeps_chinese_with_an_original_proper_noun(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = QwenAdapter("/models/qwen")
+    calls: list[list[dict[str, object]]] = []
+    monkeypatch.setattr(adapter, "_video_frames", lambda _: ["frame"])
+
+    def generate(
+        content: list[dict[str, object]],
+        *,
+        max_new_tokens: int = 256,
+    ) -> str:
+        calls.append(content)
+        assert max_new_tokens == 256
+        return "画面中可见 Bathynomus giganteus，正在岩石底质附近缓慢移动。"
+
+    monkeypatch.setattr(adapter, "_generate", generate)
+
+    description = adapter.describe_video(Path("video.mp4"))
+
+    assert description.startswith("画面中可见")
+    assert "Bathynomus giganteus" in description
+    assert len(calls) == 1
+    assert "输出必须以中文为主" in str(calls[0])
+
+
+def test_video_description_rewrites_an_english_first_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = QwenAdapter("/models/qwen")
+    responses = iter(
+        [
+            "A deep-sea fish is swimming above a rocky seafloor.",
+            "一条深海鱼正在岩石海床上方缓慢游动。",
+        ]
+    )
+    prompts: list[str] = []
+    monkeypatch.setattr(adapter, "_video_frames", lambda _: ["frame"])
+
+    def generate(
+        content: list[dict[str, object]],
+        *,
+        max_new_tokens: int = 256,
+    ) -> str:
+        prompts.append(str(content))
+        return next(responses)
+
+    monkeypatch.setattr(adapter, "_generate", generate)
+
+    assert adapter.describe_video(Path("video.mp4")) == "一条深海鱼正在岩石海床上方缓慢游动。"
+    assert len(prompts) == 2
+    assert "待改写内容" in prompts[1]
+
+
+def test_video_description_rejects_output_that_remains_english(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = QwenAdapter("/models/qwen")
+    monkeypatch.setattr(adapter, "_video_frames", lambda _: ["frame"])
+    monkeypatch.setattr(
+        adapter,
+        "_generate",
+        lambda *_, **__: "A deep-sea fish is swimming above rocks.",
+    )
+
+    with pytest.raises(ModelOutputInvalid, match="not Chinese"):
+        adapter.describe_video(Path("video.mp4"))
+
+
+def test_local_container_constructs_real_gateways_without_model_imports() -> None:
+    settings = Settings(
+        model_backend=ModelBackend.LOCAL,
+        qwen_model_path="/models/qwen",
+        image_model_path="/models/image",
+        memo_embedding_model_path="/models/gte",
+        rag_embedding_model_path="/models/minilm",
+    )
+
+    container = build_local_container(settings)
+
+    assert isinstance(container.vision, LocalVisionGateway)
+    assert isinstance(container.image, LocalImageGateway)
+    assert isinstance(container.memo_embedding, LocalEmbeddingGateway)
+    assert isinstance(container.rag_embedding, LocalEmbeddingGateway)
+
+
+def test_local_container_passes_the_optional_qwen_lora_adapter() -> None:
+    settings = Settings(
+        model_backend=ModelBackend.LOCAL,
+        qwen_model_path="/models/qwen",
+        qwen_adapter_path="/models/qwen-lora",
+        image_generation_enabled=False,
+        memo_embedding_model_path="/models/gte",
+        rag_embedding_model_path="/models/minilm",
+    )
+
+    container = build_local_container(settings)
+
+    assert isinstance(container.vision, LocalVisionGateway)
+    assert container.vision.adapter.adapter_path == Path("/models/qwen-lora")
+
+
+def test_local_container_can_disable_image_generation_without_an_image_model() -> None:
+    settings = Settings(
+        model_backend=ModelBackend.LOCAL,
+        qwen_model_path="/models/qwen",
+        image_generation_enabled=False,
+        memo_embedding_model_path="/models/gte",
+        rag_embedding_model_path="/models/minilm",
+    )
+
+    assert settings.validate_for_runtime() == []
+    assert isinstance(build_local_container(settings).image, DisabledImageGateway)
+
+
+def test_monitoring_analysis_uses_three_distinct_tag_categories() -> None:
+    analysis = _monitoring_analysis(
+        '{"description": "沙泥底质表面可见两处海绵，底面较为平坦。", '
+        '"organisms": [{"name": "海绵", "count": 2}], '
+        '"substrates": [{"name": "沙泥", "count": 1}], '
+        '"geomorphologies": [{"name": "平坦海床", "count": 1}]}'
+    )
+    assert analysis.organisms == (CountItem("海绵", 2),)
+    assert analysis.substrates == (CountItem("沙泥", 1),)
+    assert analysis.geomorphologies == (CountItem("平坦海床", 1),)
+
+
+def test_monitoring_analysis_removes_subjective_text_and_handles_empty_tags() -> None:
+    factual = _monitoring_analysis(
+        '{"description": "岩石底质上分布有海绵，场景壮观。", '
+        '"organisms": [{"name": "海绵", "count": 1}], '
+        '"substrates": [{"name": "岩石", "count": 1}], '
+        '"geomorphologies": []}'
+    )
+    empty = _monitoring_analysis(
+        '{"description": "室内环境整洁有序。", "organisms": [], "substrates": [], "geomorphologies": []}'
+    )
+
+    assert "壮观" not in factual.description
+    assert factual.description == "岩石底质上分布有海绵。"
+    assert empty.description == "画面中未确认可归类的生物、底质或地貌特征。"
+
+def test_monitoring_analysis_rejects_tags_reused_across_categories() -> None:
+    with pytest.raises(ModelOutputInvalid):
+        _monitoring_analysis(
+            '{"description": "画面可见岩石。", "organisms": [], '
+            '"substrates": [{"name": "岩石", "count": 1}], '
+            '"geomorphologies": [{"name": "岩石", "count": 1}]}'
+        )
+
+
+def test_monitoring_analysis_discards_obviously_misclassified_tags() -> None:
+    analysis = _monitoring_analysis(
+        '{"description": "沙泥底质表面可见海绵，底面较为平坦。", '
+        '"organisms": [{"name": "沙泥", "count": 1}], '
+        '"substrates": [{"name": "海绵", "count": 1}], '
+        '"geomorphologies": [{"name": "鱼类", "count": 1}]}'
+    )
+    assert analysis.organisms == ()
+    assert analysis.substrates == ()
+    assert analysis.geomorphologies == ()
